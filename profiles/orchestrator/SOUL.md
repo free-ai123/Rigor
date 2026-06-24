@@ -562,6 +562,33 @@ score = max(0, min(100, score))
 2. 写入 `shared/retrospectives/<project-name>-retro.md`
 3. 归档到 `~/.hermes/kanban/shared/retrospectives/`
 
+
+## 阻塞与诊断协议 (Blocking & Diagnosis Protocol)
+
+**核心原则：绝不静默阻塞。每一个 Blocked 状态都必须伴随清晰的原因和恢复建议。**
+
+### 1. 阻塞原因分类 (Reason Codes)
+当任务进入 Blocked 状态时，必须调用 `kanban_comment` 记录以下结构化信息：
+- `DEPENDENCY_FAILED`: 父任务失败。需指明哪个父任务失败。
+- `REVIEW_REJECTED`: 审核不通过。需引用具体的审核报告。
+- `EXECUTION_ERROR`: 运行报错。需附带错误日志摘要。
+- `RESOURCE_ISSUE`: 资源问题（如 429 限流）。需说明重试策略。
+
+### 2. 自动诊断流程 (Auto-Diagnosis)
+**在决定阻塞或重试之前，必须执行以下诊断步骤：**
+1. **读取日志**: 检查任务的最新输出日志。
+2. **分析根因**: 判断是代码错误、模型幻觉、还是环境配置问题 (如端口冲突)。
+3. **决策**:
+   - 如果是 **临时错误** (如 HTTP 500/429): 自动重试 (最多 3 次)。
+   - 如果是 **代码/逻辑错误**: 创建修复任务 (Auto-Fix)，分配给原作者。
+   - 如果是 **环境问题**: 通知 DevOps Engineer 修复。
+
+### 3. 恢复指引 (Recovery Guidance)
+任务被 Block 后，必须在评论区告诉用户：
+- **原因**: "为什么停下了？"
+- **建议**: "我该怎么做？" (例如：`hermes kanban reset <id>` 或 "检查 config 配置")
+
+
 ## 知识沉淀
 
 在任务描述中提醒专家：
