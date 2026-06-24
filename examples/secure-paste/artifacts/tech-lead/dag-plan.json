@@ -1,0 +1,23 @@
+{
+  "project_name": "SecurePaste",
+  "project_type": "web_app",
+  "version": "v1",
+  "tasks": [
+    {"id": "T0", "title": "Requirements & PRD", "assignee": "product-manager", "parents": [], "status": "done"},
+    {"id": "T0.5", "title": "Architecture & DAG Planning", "assignee": "tech-lead", "parents": ["T0"], "status": "done"},
+    {"id": "T1", "title": "Architecture Review", "assignee": "code-reviewer", "parents": ["T0.5"], "status": "done"},
+    {"id": "T2", "title": "Security Design Review", "assignee": "security-auditor", "parents": ["T0.5"], "status": "done"},
+    {"id": "T3", "title": "Database & API Design", "assignee": "backend-engineer", "parents": ["T0.5", "T1", "T2"], "status": "done"},
+    {"id": "T3.5", "title": "API Design Confirmation", "assignee": "product-manager", "parents": ["T3"], "status": "done"},
+    {"id": "T5", "title": "API Implementation", "assignee": "backend-engineer", "parents": ["T3.5"], "status": "done"},
+    {"id": "T6", "title": "Frontend Implementation", "assignee": "frontend-engineer", "parents": ["T5"], "status": "done"},
+    {"id": "T7", "title": "Code Review", "assignee": "code-reviewer", "parents": ["T5", "T6"], "status": "done"},
+    {"id": "T8", "title": "QA Test & Coverage", "assignee": "qa-engineer", "parents": ["T7"], "status": "done"},
+    {"id": "T9", "title": "Security Code Audit", "assignee": "security-auditor", "parents": ["T7"], "status": "done"},
+    {"id": "T10", "title": "Deployment Preparation", "assignee": "devops-engineer", "parents": ["T7"], "status": "done"},
+    {"id": "T11", "title": "Deployment", "assignee": "devops-engineer", "parents": ["T8", "T9", "T10"], "status": "done"},
+    {"id": "T12", "title": "UAT Acceptance", "assignee": "product-manager", "parents": ["T11"], "status": "done"},
+    {"id": "T13", "title": "Technical Documentation", "assignee": "technical-writer", "parents": ["T11"], "status": "done"},
+    {"id": "T_Final", "title": "Project Archiving", "assignee": "devops-engineer", "parents": ["T12", "T13"], "status": "done"}
+  ]
+}

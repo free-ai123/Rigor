@@ -1,0 +1,45 @@
+{
+  "project_name": "SecurePaste",
+  "project_type": "web_app",
+  "started_at": "2026-06-24T10:00:00Z",
+  "completed_at": "2026-06-24T14:30:00Z",
+  "duration_hours": 4.5,
+  "roles_used": [
+    "orchestrator", "product-manager", "tech-lead",
+    "backend-engineer", "frontend-engineer",
+    "code-reviewer", "security-auditor",
+    "qa-engineer", "devops-engineer", "technical-writer"
+  ],
+  "tasks": {
+    "total": 14,
+    "completed": 14,
+    "auto_fixes": 2,
+    "auto_fix_success_rate": 100,
+    "escalations": 0
+  },
+  "quality": {
+    "final_score": 85,
+    "coverage_percent": 89.2,
+    "bugs_found": 3,
+    "security_issues": 1,
+    "review_pass_rate": 100,
+    "uat_result": "passed"
+  },
+  "knowledge": {
+    "entries_used": [
+      "decision-001",
+      "decision-002",
+      "gotcha-deploy-version-sync"
+    ],
+    "new_entries_created": [
+      "gotcha-race-condition-burn",
+      "pattern-atomic-delete",
+      "pattern-aes256-paste"
+    ],
+    "prevented_issues": 2
+  },
+  "artifacts": {
+    "total_created": 15,
+    "total_versions": 19
+  }
+}

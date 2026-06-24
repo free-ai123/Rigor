@@ -1,0 +1,217 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "SecurePaste API",
+    "version": "1.0.0",
+    "description": "API for creating and viewing encrypted, ephemeral text/code shares"
+  },
+  "servers": [
+    {
+      "url": "https://api.securepaste.example.com/api/v1",
+      "description": "Production server"
+    }
+  ],
+  "paths": {
+    "/pastes": {
+      "post": {
+        "summary": "Create a new secure paste",
+        "operationId": "createPaste",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePasteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Paste created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatePasteResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (max 10 pastes per minute per IP)"
+          }
+        }
+      }
+    },
+    "/pastes/{id}": {
+      "get": {
+        "summary": "View a secure paste (triggers burn-after-read if enabled)",
+        "operationId": "getPaste",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paste content retrieved successfully",
+            "headers": {
+              "X-Burn-After-Read": {
+                "schema": {
+                  "type": "boolean"
+                },
+                "description": "Whether the paste was deleted after this read"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasteResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Password required or incorrect password",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordRequiredResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Paste not found (expired or already read)"
+          },
+          "429": {
+            "description": "Too many password attempts (locked for 15 minutes)"
+          }
+        }
+      }
+    },
+    "/pastes/{id}/exists": {
+      "head": {
+        "summary": "Check if a paste exists",
+        "operationId": "checkPasteExists",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paste exists"
+          },
+          "404": {
+            "description": "Paste does not exist"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CreatePasteRequest": {
+        "type": "object",
+        "required": ["content"],
+        "properties": {
+          "content": {
+            "type": "string",
+            "maxLength": 1048576,
+            "description": "The text or code content to share (max 1MB)"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "description": "Optional password to protect the paste"
+          },
+          "burn_after_read": {
+            "type": "boolean",
+            "default": false,
+            "description": "If true, the paste is deleted after the first successful read"
+          },
+          "expiration_seconds": {
+            "type": "integer",
+            "enum": [3600, 86400, 604800],
+            "default": 86400,
+            "description": "Expiration time in seconds (1 hour / 24 hours / 7 days)"
+          }
+        }
+      },
+      "CreatePasteResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "example": "https://securepaste.example.com/p/550e8400-e29b-41d4-a716-446655440000"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "burn_after_read": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PasteResponse": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "The decrypted paste content"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PasswordRequiredResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "example": "password_required"
+          },
+          "message": {
+            "type": "string",
+            "example": "This paste is password-protected. Provide the password in the X-Paste-Password header."
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "PastePassword": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Paste-Password",
+        "description": "Password for accessing password-protected pastes"
+      }
+    }
+  }
+}
