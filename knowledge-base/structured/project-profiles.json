@@ -1,0 +1,70 @@
+{
+  "version": "1.0",
+  "updated_at": "2026-06-24",
+  "profiles": {},
+  "injection_rules": [
+    {
+      "condition": {
+        "project_type": "web_app"
+      },
+      "inject": [
+        "decision-001",
+        "decision-002",
+        "gotcha-deploy-version-sync"
+      ],
+      "reason": "Web 应用需要持久化工作空间和 API 审查流程"
+    },
+    {
+      "condition": {
+        "project_type": "backend_api"
+      },
+      "inject": [
+        "decision-001",
+        "decision-002",
+        "gotcha-deploy-version-sync"
+      ],
+      "reason": "后端 API 项目需要持久化工作空间和 PM API 审查"
+    },
+    {
+      "condition": {
+        "project_type": "rust"
+      },
+      "inject": [
+        "decision-003",
+        "decision-004"
+      ],
+      "reason": "Rust 项目需要行情引擎最佳实践和 production fixes"
+    },
+    {
+      "condition": {
+        "project_type": "cli_tool"
+      },
+      "inject": [
+        "decision-005"
+      ],
+      "reason": "CLI 工具需要 PRD 模式参考"
+    },
+    {
+      "condition": {
+        "has_roles": [
+          "devops-engineer"
+        ]
+      },
+      "inject": [
+        "gotcha-deploy-version-sync"
+      ],
+      "reason": "任何有部署环节的项目都需要版本同步规则"
+    },
+    {
+      "condition": {
+        "has_roles": [
+          "code-reviewer"
+        ]
+      },
+      "inject": [
+        "decision-001"
+      ],
+      "reason": "有代码审查角色的项目必须使用持久化工作空间"
+    }
+  ]
+}

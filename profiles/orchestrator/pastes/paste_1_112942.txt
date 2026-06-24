@@ -1,0 +1,2226 @@
+# Node.js ETH/BSC/TRON 多链自动归集系统最终技术方案 V1
+
+## 版本定位
+
+本方案定位为：
+
+```text
+单机生产稳定版 V1
+```
+
+核心目标：
+
+```text
+不引入 Redis
+不引入 MQ
+不引入 KMS/HSM
+不做区块事件监听
+不做签名服务拆分
+先用 Node.js + MySQL + RPC 方式实现稳定、可追踪、可恢复的三链归集系统
+```
+
+支持范围：
+
+```text
+ETH 主网
+BSC 链
+TRON/TRX 链
+
+ETH 主币归集
+BNB 主币归集
+TRX 主币归集
+
+ERC20-USDT 归集
+BEP20-USDT 归集
+TRC20-USDT 归集
+```
+
+---
+
+# 1. 总体架构
+
+## 1.1 数据库分离
+
+系统分为两个数据库：
+
+```text
+业务库 cadd
+  └── 只保存业务地址和地址使用状态
+      不保存私钥
+      不保存归集状态
+
+归集库 collector
+  └── 保存加密私钥
+      保存归集任务
+      保存交易流水
+      保存余额缓存
+      保存 nonce 状态
+      保存 RPC 节点
+      保存 Gas 策略
+      保存系统告警和状态日志
+```
+
+---
+
+## 1.2 业务库职责
+
+业务库已有表：
+
+```sql
+tl_trade_address
+```
+
+核心字段：
+
+```text
+id              业务地址 ID
+address         用户充值地址
+user_id         用户 ID
+coin            币种，通常 USDT
+chain           链，ETH/BSC/TRX/TRON
+status          地址状态
+```
+
+状态含义：
+
+```text
+status = 0：地址未使用，不监听
+status = 1：地址已分配/已使用，需要归集程序监听
+```
+
+业务库不保存：
+
+```text
+私钥
+归集任务状态
+tx_hash
+补手续费状态
+链上确认状态
+```
+
+---
+
+## 1.3 归集库职责
+
+归集库负责：
+
+```text
+1. 生成钱包地址和私钥
+2. 使用 AES-256-GCM 加密私钥
+3. 将地址提供给业务库使用
+4. 同步业务库 status=1 的地址
+5. 轮询扫描地址余额
+6. 创建归集任务
+7. 自动补 ETH/BNB/TRX 手续费
+8. 执行 ETH/BSC/TRON 主币和 USDT 归集
+9. 管理 EVM nonce
+10. 管理 RPC 节点池
+11. 管理 Gas 策略
+12. 监控交易确认
+13. 处理 pending 超时
+14. 记录任务状态日志
+15. 记录系统告警
+```
+
+---
+
+# 2. 系统架构图
+
+```text
+业务库 cadd
+└── tl_trade_address
+    └── status = 1 的已使用地址
+            ↓
+      addressSyncJob
+            ↓
+归集库 collector
+├── wallet_key              地址私钥表
+├── wallet_address          已使用地址镜像表
+├── chain_config            链配置表
+├── asset_config            资产配置表
+├── fee_wallet              手续费钱包表
+├── address_balance         地址余额缓存表
+├── collect_task            归集任务表
+├── collect_task_open       未完成任务幂等表
+├── chain_transaction       链上交易流水表
+├── nonce_state             EVM nonce 状态表
+├── gas_policy              Gas 策略表
+├── rpc_endpoint            RPC 节点表
+├── task_status_log         任务状态变更日志表
+├── system_alert            系统告警表
+└── collector_state         系统运行状态表
+            ↓
+      balanceScanJob
+            ↓
+      collectJob / feeJob
+            ↓
+      monitorJob / retryJob
+            ↓
+ETH / BSC / TRON 链
+```
+
+---
+
+# 3. 第一版核心设计原则
+
+## 3.1 保持架构克制
+
+第一版不引入：
+
+```text
+Redis
+BullMQ
+Kafka
+RabbitMQ
+KMS
+HSM
+MPC
+签名服务
+区块事件监听
+TRON 能量租赁
+多机分布式锁
+```
+
+原因：
+
+```text
+先保证系统稳定上线
+降低运维复杂度
+降低开发风险
+先解决最核心的归集闭环
+```
+
+---
+
+## 3.2 第一版必须具备的生产安全垫
+
+虽然不引入复杂中间件，但以下能力必须有：
+
+```text
+1. AES-256-GCM 私钥加密
+2. MySQL 任务锁
+3. collect_task_open 幂等控制
+4. EVM Nonce Manager
+5. RPC Pool 简化版
+6. RPC 限流
+7. Gas 策略
+8. Pending 超时处理
+9. 链上交易完整记录
+10. 任务状态变更日志
+11. 系统告警
+```
+
+---
+
+# 4. 技术选型
+
+## 4.1 后端语言
+
+```text
+Node.js 18+ / Node.js 20+
+```
+
+---
+
+## 4.2 数据库
+
+```text
+MySQL 8.x
+```
+
+---
+
+## 4.3 主要依赖
+
+```bash
+npm install ethers tronweb mysql2 decimal.js dotenv winston node-cron uuid bottleneck
+```
+
+| 依赖 | 用途 |
+|---|---|
+| `ethers` | ETH/BSC 查询、签名、发送交易 |
+| `tronweb` | TRON/TRX 查询、签名、发送交易 |
+| `mysql2` | MySQL 连接 |
+| `decimal.js` | 高精度金额计算 |
+| `dotenv` | 环境变量 |
+| `winston` | 日志 |
+| `node-cron` | 定时任务 |
+| `uuid` | 任务编号 |
+| `bottleneck` | RPC 限流 |
+
+---
+
+# 5. 项目目录结构
+
+```text
+collector-service/
+├── package.json
+├── .env
+├── logs/
+├── src/
+│   ├── app.js
+│   ├── config/
+│   │   ├── index.js
+│   │   └── chains.js
+│   ├── db/
+│   │   ├── bizDb.js
+│   │   └── collectorDb.js
+│   ├── chains/
+│   │   ├── evmAdapter.js
+│   │   └── tronAdapter.js
+│   ├── jobs/
+│   │   ├── addressSyncJob.js
+│   │   ├── balanceScanJob.js
+│   │   ├── collectJob.js
+│   │   ├── feeJob.js
+│   │   ├── monitorJob.js
+│   │   └── retryJob.js
+│   ├── services/
+│   │   ├── walletGenerateService.js
+│   │   ├── addressSyncService.js
+│   │   ├── balanceService.js
+│   │   ├── collectTaskService.js
+│   │   ├── collectService.js
+│   │   ├── feeService.js
+│   │   ├── monitorService.js
+│   │   ├── nonceService.js
+│   │   ├── gasService.js
+│   │   ├── rpcService.js
+│   │   ├── alertService.js
+│   │   └── taskLogService.js
+│   ├── utils/
+│   │   ├── crypto.js
+│   │   ├── amount.js
+│   │   ├── logger.js
+│   │   ├── chain.js
+│   │   └── time.js
+│   └── constants/
+│       └── status.js
+```
+
+---
+
+# 6. 核心流程
+
+## 6.1 地址生成流程
+
+```text
+归集系统生成 ETH/BSC/TRON 地址和私钥
+    ↓
+私钥使用 AES-256-GCM 加密
+    ↓
+密文私钥保存到 collector.wallet_key
+    ↓
+地址写入业务库 cadd.tl_trade_address，status=0
+    ↓
+业务系统分配地址给用户
+    ↓
+业务库将 status 更新为 1
+```
+
+---
+
+## 6.2 地址同步流程
+
+```text
+addressSyncJob 定时查询业务库 tl_trade_address
+    ↓
+筛选 status = 1 的地址
+    ↓
+标准化 chain 和 address
+    ↓
+在 collector.wallet_key 中查找 chain + address
+    ↓
+找到私钥记录：
+      写入/更新 wallet_address，status=1
+    ↓
+找不到私钥记录：
+      写入/更新 wallet_address，status=3 缺私钥
+      写入 system_alert
+```
+
+---
+
+## 6.3 余额扫描流程
+
+```text
+balanceScanJob 查询 wallet_address.status=1 的地址
+    ↓
+按 chain 分批扫描
+    ↓
+通过 rpcService 获取可用 RPC
+    ↓
+通过限流器限制请求频率
+    ↓
+查询主币余额
+    ↓
+查询 USDT 余额
+    ↓
+更新 address_balance
+    ↓
+达到归集阈值则创建 collect_task
+    ↓
+通过 collect_task_open 防止重复任务
+```
+
+---
+
+## 6.4 USDT 归集流程
+
+```text
+发现 USDT 余额达到阈值
+    ↓
+创建 TOKEN_COLLECT 任务
+    ↓
+collectJob 领取任务并加锁
+    ↓
+检查该地址主币余额是否足够支付手续费
+    ↓
+主币不足：
+      任务状态改为 1 待补手续费
+    ↓
+feeJob 给用户地址补 ETH/BNB/TRX
+    ↓
+补手续费交易广播
+    ↓
+monitorJob 确认补手续费成功
+    ↓
+任务状态改为 3 待归集
+    ↓
+collectJob 解密用户地址私钥
+    ↓
+发起 USDT 转账到归集地址
+    ↓
+monitorJob 确认归集成功
+    ↓
+任务完成，释放 collect_task_open
+```
+
+---
+
+## 6.5 主币归集流程
+
+```text
+发现 ETH/BNB/TRX 余额达到阈值
+    ↓
+创建 MAIN_COLLECT 任务
+    ↓
+计算可归集金额
+    ↓
+ETH/BNB：
+      可归集金额 = 当前余额 - 预计 gas - reserve_main_amount
+    ↓
+TRX：
+      可归集金额 = 当前余额 - reserve_main_amount
+    ↓
+解密用户地址私钥
+    ↓
+发起主币转账到归集地址
+    ↓
+写入 chain_transaction
+    ↓
+monitorJob 确认成功
+    ↓
+任务完成
+```
+
+---
+
+# 7. 数据库设计
+
+以下表均在归集库 `collector` 中。
+
+---
+
+# 7.1 地址私钥表：`wallet_key`
+
+```sql
+CREATE TABLE `wallet_key` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `chain` VARCHAR(32) NOT NULL COMMENT 'ETH/BSC/TRON',
+  `address` VARCHAR(128) NOT NULL,
+  `address_hex` VARCHAR(128) DEFAULT NULL COMMENT 'TRON hex地址',
+
+  `private_key_cipher` TEXT NOT NULL COMMENT 'AES-256-GCM密文',
+  `private_key_iv` VARCHAR(64) NOT NULL COMMENT '12字节IV hex',
+  `private_key_tag` VARCHAR(64) NOT NULL COMMENT 'GCM认证tag hex',
+  `encryption_algo` VARCHAR(64) NOT NULL DEFAULT 'AES-256-GCM',
+  `key_version` INT NOT NULL DEFAULT 1,
+
+  `status` TINYINT NOT NULL DEFAULT 1 COMMENT '1正常 0禁用 2冻结',
+  `created_at` INT NOT NULL,
+  `updated_at` INT NOT NULL,
+
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_chain_address` (`chain`, `address`),
+  KEY `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+---
+
+# 7.2 已使用地址镜像表：`wallet_address`
+
+```sql
+CREATE TABLE `wallet_address` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `biz_address_id` INT NOT NULL COMMENT '业务库tl_trade_address.id',
+  `biz_user_id` INT DEFAULT 0,
+  `chain` VARCHAR(32) NOT NULL COMMENT 'ETH/BSC/TRON',
+  `symbol` VARCHAR(32) DEFAULT 'USDT',
+  `address` VARCHAR(128) NOT NULL,
+  `wallet_key_id` BIGINT DEFAULT NULL,
+
+  `source_status` INT DEFAULT 1 COMMENT '业务库status',
+  `status` TINYINT NOT NULL DEFAULT 1 COMMENT '1启用 0禁用 2冻结 3缺私钥',
+  `last_scan_time` INT DEFAULT 0,
+  `last_sync_time` INT DEFAULT 0,
+
+  `created_at` INT NOT NULL,
+  `updated_at` INT NOT NULL,
+
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_biz_address_id` (`biz_address_id`),
+  UNIQUE KEY `uniq_chain_address` (`chain`, `address`),
+  KEY `idx_wallet_key_id` (`wallet_key_id`),
+  KEY `idx_chain_status_scan` (`chain`, `status`, `last_scan_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+---
+
+# 7.3 链配置表：`chain_config`
+
+```sql
+CREATE TABLE `chain_config` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `chain` VARCHAR(32) NOT NULL COMMENT 'ETH/BSC/TRON',
+  `chain_type` VARCHAR(32) NOT NULL COMMENT 'EVM/TRON',
+  `main_symbol` VARCHAR(32) NOT NULL COMMENT 'ETH/BNB/TRX',
+  `chain_id` BIGINT DEFAULT NULL,
+  `confirm_blocks` INT NOT NULL DEFAULT 12,
+  `enabled` TINYINT NOT NULL DEFAULT 1,
+  `created_at` INT NOT NULL,
+  `updated_at` INT NOT NULL,
+
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_chain` (`chain`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+> RPC 不直接放在 `chain_config`，统一放到 `rpc_endpoint`，便于多节点切换。
+
+---
+
+# 7.4 资产配置表：`asset_config`
+
+```sql
+CREATE TABLE `asset_config` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `chain` VARCHAR(32) NOT NULL,
+  `symbol` VARCHAR(32) NOT NULL COMMENT 'ETH/BNB/TRX/USDT',
+  `asset_type` VARCHAR(32) NOT NULL COMMENT 'MAIN/TOKEN',
+  `contract_address` VARCHAR(128) DEFAULT NULL,
+  `decimals` INT NOT NULL,
+  `collect_address` VARCHAR(128) NOT NULL COMMENT '归集接收地址',
+
+  `min_collect_amount` DECIMAL(40,18) NOT NULL DEFAULT '0',
+  `reserve_main_amount` DECIMAL(40,18) NOT NULL DEFAULT '0',
+  `min_fee_balance` DECIMAL(40,18) NOT NULL DEFAULT '0',
+  `fee_topup_amount` DECIMAL(40,18) NOT NULL DEFAULT '0',
+  `fee_limit` BIGINT DEFAULT NULL COMMENT 'TRON feeLimit，单位 SUN',
+
+  `enabled` TINYINT NOT NULL DEFAULT 1,
+  `created_at` INT NOT NULL,
+  `updated_at` INT NOT NULL,
+
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_chain_symbol` (`chain`, `symbol`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+---
+
+# 7.5 手续费钱包表：`fee_wallet`
+
+```sql
+CREATE TABLE `fee_wallet` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `chain` VARCHAR(32) NOT NULL,
+  `address` VARCHAR(128) NOT NULL,
+  `address_hex` VARCHAR(128) DEFAULT NULL,
+
+  `private_key_cipher` TEXT NOT NULL,
+  `private_key_iv` VARCHAR(64) NOT NULL,
+  `private_key_tag` VARCHAR(64) NOT NULL,
+  `encryption_algo` VARCHAR(64) NOT NULL DEFAULT 'AES-256-GCM',
+  `key_version` INT NOT NULL DEFAULT 1,
+
+  `status` TINYINT NOT NULL DEFAULT 1,
+  `balance_cache` DECIMAL(40,18) DEFAULT '0',
+  `balance_updated_at` INT DEFAULT 0,
+
+  `created_at` INT NOT NULL,
+  `updated_at` INT NOT NULL,
+
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_chain_address` (`chain`, `address`),
+  KEY `idx_chain_status` (`chain`, `status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+---
+
+# 7.6 地址余额缓存表：`address_balance`
+
+```sql
+CREATE TABLE `address_balance` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `wallet_address_id` BIGINT NOT NULL,
+  `chain` VARCHAR(32) NOT NULL,
+  `symbol` VARCHAR(32) NOT NULL,
+  `address` VARCHAR(128) NOT NULL,
+
+  `balance` DECIMAL(40,18) NOT NULL DEFAULT '0',
+  `raw_balance` VARCHAR(100) NOT NULL DEFAULT '0',
+  `updated_at` INT NOT NULL,
+
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_chain_symbol_address` (`chain`, `symbol`, `address`),
+  KEY `idx_wallet_address_id` (`wallet_address_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+---
+
+# 7.7 归集任务表：`collect_task`
+
+```sql
+CREATE TABLE `collect_task` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `task_no` VARCHAR(64) NOT NULL,
+
+  `task_type` VARCHAR(32) NOT NULL COMMENT 'MAIN_COLLECT/TOKEN_COLLECT',
+
+  `wallet_address_id` BIGINT NOT NULL,
+  `wallet_key_id` BIGINT DEFAULT NULL,
+  `biz_address_id` INT DEFAULT NULL,
+  `biz_user_id` INT DEFAULT NULL,
+
+  `chain` VARCHAR(32) NOT NULL,
+  `symbol` VARCHAR(32) NOT NULL,
+  `asset_type` VARCHAR(32) NOT NULL COMMENT 'MAIN/TOKEN',
+
+  `from_address` VARCHAR(128) NOT NULL,
+  `to_address` VARCHAR(128) NOT NULL,
+  `contract_address` VARCHAR(128) DEFAULT NULL,
+
+  `amount` DECIMAL(40,18) NOT NULL DEFAULT '0',
+  `raw_amount` VARCHAR(100) NOT NULL DEFAULT '0',
+
+  `status` TINYINT NOT NULL DEFAULT 0 COMMENT '0待处理 1待补手续费 2补手续费中 3待归集 4归集中 5已广播 6成功 7失败 8跳过',
+  `fee_tx_hash` VARCHAR(128) DEFAULT NULL,
+  `collect_tx_hash` VARCHAR(128) DEFAULT NULL,
+
+  `retry_count` INT NOT NULL DEFAULT 0,
+  `max_retry` INT NOT NULL DEFAULT 5,
+  `next_retry_time` INT DEFAULT 0,
+
+  `locked_by` VARCHAR(64) DEFAULT NULL,
+  `locked_until` INT DEFAULT 0,
+
+  `error_code` VARCHAR(100) DEFAULT NULL,
+  `error_msg` TEXT DEFAULT NULL,
+
+  `created_at` INT NOT NULL,
+  `updated_at` INT NOT NULL,
+
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_task_no` (`task_no`),
+  KEY `idx_status_retry` (`status`, `next_retry_time`),
+  KEY `idx_chain_symbol_status` (`chain`, `symbol`, `status`),
+  KEY `idx_from_address` (`from_address`),
+  KEY `idx_wallet_address_id` (`wallet_address_id`),
+  KEY `idx_collect_tx_hash` (`collect_tx_hash`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+---
+
+# 7.8 未完成任务幂等表：`collect_task_open`
+
+```sql
+CREATE TABLE `collect_task_open` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `task_key` VARCHAR(255) NOT NULL COMMENT 'chain:symbol:from_address',
+  `task_id` BIGINT NOT NULL,
+  `created_at` INT NOT NULL,
+
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_task_key` (`task_key`),
+  KEY `idx_task_id` (`task_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+---
+
+# 7.9 链上交易流水表：`chain_transaction`
+
+```sql
+CREATE TABLE `chain_transaction` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `task_id` BIGINT DEFAULT NULL,
+
+  `chain` VARCHAR(32) NOT NULL,
+  `symbol` VARCHAR(32) NOT NULL,
+  `tx_type` VARCHAR(32) NOT NULL COMMENT 'FEE_TOPUP/COLLECT_MAIN/COLLECT_TOKEN',
+
+  `from_address` VARCHAR(128) NOT NULL,
+  `to_address` VARCHAR(128) NOT NULL,
+  `contract_address` VARCHAR(128) DEFAULT NULL,
+
+  `amount` DECIMAL(40,18) NOT NULL DEFAULT '0',
+  `raw_amount` VARCHAR(100) NOT NULL DEFAULT '0',
+
+  `tx_hash` VARCHAR(128) DEFAULT NULL,
+  `nonce` BIGINT DEFAULT NULL COMMENT 'EVM nonce',
+
+  `block_number` BIGINT DEFAULT 0,
+  `confirm_count` INT DEFAULT 0,
+
+  `gas_limit` VARCHAR(100) DEFAULT NULL,
+  `gas_price` VARCHAR(100) DEFAULT NULL,
+  `max_fee_per_gas` VARCHAR(100) DEFAULT NULL,
+  `max_priority_fee_per_gas` VARCHAR(100) DEFAULT NULL,
+  `gas_used` VARCHAR(100) DEFAULT NULL,
+  `effective_gas_price` VARCHAR(100) DEFAULT NULL,
+  `fee_amount` DECIMAL(40,18) DEFAULT '0',
+
+  `broadcast_at` INT DEFAULT 0,
+  `confirmed_at` INT DEFAULT 0,
+  `last_checked_at` INT DEFAULT 0,
+  `expire_at` INT DEFAULT 0 COMMENT 'pending超时时间',
+
+  `status` TINYINT NOT NULL DEFAULT 0 COMMENT '0创建 1已广播 2成功 3失败 4超时',
+  `error_msg` TEXT DEFAULT NULL,
+  `raw_error` TEXT DEFAULT NULL,
+
+  `created_at` INT NOT NULL,
+  `updated_at` INT NOT NULL,
+
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_chain_tx_hash` (`chain`, `tx_hash`),
+  KEY `idx_task_id` (`task_id`),
+  KEY `idx_chain_status` (`chain`, `status`),
+  KEY `idx_from_nonce` (`chain`, `from_address`, `nonce`),
+  KEY `idx_expire` (`status`, `expire_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+---
+
+# 7.10 EVM Nonce 状态表：`nonce_state`
+
+```sql
+CREATE TABLE `nonce_state` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `chain` VARCHAR(32) NOT NULL COMMENT 'ETH/BSC',
+  `address` VARCHAR(128) NOT NULL,
+
+  `next_nonce` BIGINT DEFAULT NULL COMMENT '本地维护的下一个nonce',
+  `pending_count` INT NOT NULL DEFAULT 0 COMMENT '本地pending数量',
+
+  `locked_by` VARCHAR(64) DEFAULT NULL,
+  `locked_until` INT DEFAULT 0,
+
+  `last_chain_nonce` BIGINT DEFAULT NULL COMMENT '链上latest nonce',
+  `last_pending_nonce` BIGINT DEFAULT NULL COMMENT '链上pending nonce',
+
+  `status` TINYINT NOT NULL DEFAULT 1 COMMENT '1正常 2冻结',
+  `created_at` INT NOT NULL,
+  `updated_at` INT NOT NULL,
+
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_chain_address` (`chain`, `address`),
+  KEY `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+---
+
+# 7.11 Gas 策略表：`gas_policy`
+
+```sql
+CREATE TABLE `gas_policy` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `chain` VARCHAR(32) NOT NULL,
+
+  `mode` VARCHAR(32) NOT NULL DEFAULT 'AUTO' COMMENT 'AUTO/FIXED',
+  `min_gas_price_gwei` DECIMAL(40,18) DEFAULT NULL,
+  `max_gas_price_gwei` DECIMAL(40,18) DEFAULT NULL,
+
+  `max_fee_per_gas_gwei` DECIMAL(40,18) DEFAULT NULL,
+  `max_priority_fee_per_gas_gwei` DECIMAL(40,18) DEFAULT NULL,
+
+  `main_transfer_gas_limit` BIGINT DEFAULT NULL,
+  `token_transfer_gas_limit` BIGINT DEFAULT NULL,
+
+  `enabled` TINYINT NOT NULL DEFAULT 1,
+  `created_at` INT NOT NULL,
+  `updated_at` INT NOT NULL,
+
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_chain` (`chain`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+---
+
+# 7.12 RPC 节点表：`rpc_endpoint`
+
+```sql
+CREATE TABLE `rpc_endpoint` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `chain` VARCHAR(32) NOT NULL,
+  `url` VARCHAR(512) NOT NULL,
+  `priority` INT NOT NULL DEFAULT 100,
+  `status` TINYINT NOT NULL DEFAULT 1 COMMENT '1正常 0禁用 2故障',
+  `fail_count` INT NOT NULL DEFAULT 0,
+  `last_fail_at` INT DEFAULT 0,
+  `last_success_at` INT DEFAULT 0,
+  `remark` VARCHAR(255) DEFAULT NULL,
+  `created_at` INT NOT NULL,
+  `updated_at` INT NOT NULL,
+
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_chain_url` (`chain`, `url`),
+  KEY `idx_chain_status_priority` (`chain`, `status`, `priority`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+---
+
+# 7.13 任务状态日志表：`task_status_log`
+
+```sql
+CREATE TABLE `task_status_log` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `task_id` BIGINT NOT NULL,
+  `task_no` VARCHAR(64) DEFAULT NULL,
+
+  `old_status` TINYINT DEFAULT NULL,
+  `new_status` TINYINT NOT NULL,
+
+  `reason` VARCHAR(255) DEFAULT NULL,
+  `remark` TEXT DEFAULT NULL,
+
+  `operator` VARCHAR(64) DEFAULT 'system',
+  `created_at` INT NOT NULL,
+
+  PRIMARY KEY (`id`),
+  KEY `idx_task_id` (`task_id`),
+  KEY `idx_created_at` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+---
+
+# 7.14 系统告警表：`system_alert`
+
+```sql
+CREATE TABLE `system_alert` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `level` VARCHAR(16) NOT NULL COMMENT 'INFO/WARN/ERROR/CRITICAL',
+  `type` VARCHAR(64) NOT NULL,
+  `chain` VARCHAR(32) DEFAULT NULL,
+  `address` VARCHAR(128) DEFAULT NULL,
+  `task_id` BIGINT DEFAULT NULL,
+  `message` TEXT NOT NULL,
+  `status` TINYINT NOT NULL DEFAULT 0 COMMENT '0未处理 1已处理',
+  `created_at` INT NOT NULL,
+  `updated_at` INT NOT NULL,
+
+  PRIMARY KEY (`id`),
+  KEY `idx_status_level` (`status`, `level`),
+  KEY `idx_type` (`type`),
+  KEY `idx_task_id` (`task_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+---
+
+# 7.15 系统运行状态表：`collector_state`
+
+```sql
+CREATE TABLE `collector_state` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `state_key` VARCHAR(128) NOT NULL,
+  `state_value` TEXT DEFAULT NULL,
+  `updated_at` INT NOT NULL,
+
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_state_key` (`state_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+---
+
+# 8. 状态机设计
+
+## 8.1 `wallet_key.status`
+
+| 状态 | 含义 |
+|---:|---|
+| 0 | 禁用 |
+| 1 | 正常 |
+| 2 | 冻结 |
+
+---
+
+## 8.2 `wallet_address.status`
+
+| 状态 | 含义 |
+|---:|---|
+| 0 | 禁用 |
+| 1 | 启用 |
+| 2 | 冻结 |
+| 3 | 缺私钥 |
+
+---
+
+## 8.3 `collect_task.status`
+
+| 状态 | 名称 | 说明 |
+|---:|---|---|
+| 0 | 待处理 | 新建归集任务 |
+| 1 | 待补手续费 | Token 归集时主币不足 |
+| 2 | 补手续费中 | 补手续费交易已广播 |
+| 3 | 待归集 | 手续费已满足，等待归集 |
+| 4 | 归集中 | 正在签名/广播归集交易 |
+| 5 | 已广播 | 归集交易已广播 |
+| 6 | 成功 | 链上确认成功 |
+| 7 | 失败 | 任务失败 |
+| 8 | 跳过 | 余额不足或无需归集 |
+
+---
+
+## 8.4 `chain_transaction.status`
+
+| 状态 | 含义 |
+|---:|---|
+| 0 | 创建 |
+| 1 | 已广播 |
+| 2 | 成功 |
+| 3 | 失败 |
+| 4 | 超时 |
+
+---
+
+# 9. 私钥加密方案
+
+## 9.1 加密算法
+
+第一版采用：
+
+```text
+AES-256-GCM
+```
+
+特点：
+
+```text
+加密 + 完整性校验
+Node.js 官方 crypto 模块原生支持
+适合数据库密文存储
+```
+
+---
+
+## 9.2 密钥来源
+
+环境变量：
+
+```text
+WALLET_MASTER_KEY
+```
+
+要求：
+
+```text
+32 字节
+64 位 hex 字符串
+不得入库
+不得提交 Git
+不得打印日志
+```
+
+生成方式：
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+---
+
+## 9.3 加密字段
+
+```text
+private_key_cipher  密文
+private_key_iv      12 字节随机 IV
+private_key_tag     GCM 认证标签
+```
+
+---
+
+## 9.4 加解密代码
+
+```js
+const crypto = require('crypto');
+
+const ALGO = 'aes-256-gcm';
+
+function getMasterKey() {
+  const keyHex = process.env.WALLET_MASTER_KEY;
+
+  if (!keyHex) {
+    throw new Error('WALLET_MASTER_KEY missing');
+  }
+
+  const key = Buffer.from(keyHex, 'hex');
+
+  if (key.length !== 32) {
+    throw new Error('WALLET_MASTER_KEY must be 32 bytes hex');
+  }
+
+  return key;
+}
+
+function encryptPrivateKey(privateKey) {
+  const key = getMasterKey();
+  const iv = crypto.randomBytes(12);
+
+  const cipher = crypto.createCipheriv(ALGO, key, iv);
+
+  const encrypted = Buffer.concat([
+    cipher.update(privateKey, 'utf8'),
+    cipher.final()
+  ]);
+
+  const tag = cipher.getAuthTag();
+
+  return {
+    private_key_cipher: encrypted.toString('hex'),
+    private_key_iv: iv.toString('hex'),
+    private_key_tag: tag.toString('hex'),
+    encryption_algo: 'AES-256-GCM',
+    key_version: 1
+  };
+}
+
+function decryptPrivateKey(row) {
+  const key = getMasterKey();
+
+  const decipher = crypto.createDecipheriv(
+    ALGO,
+    key,
+    Buffer.from(row.private_key_iv, 'hex')
+  );
+
+  decipher.setAuthTag(Buffer.from(row.private_key_tag, 'hex'));
+
+  const decrypted = Buffer.concat([
+    decipher.update(Buffer.from(row.private_key_cipher, 'hex')),
+    decipher.final()
+  ]);
+
+  return decrypted.toString('utf8');
+}
+
+module.exports = {
+  encryptPrivateKey,
+  decryptPrivateKey
+};
+```
+
+---
+
+# 10. 链配置和资产配置
+
+## 10.1 链配置建议
+
+| chain | chain_type | main_symbol | chain_id | confirm_blocks |
+|---|---|---|---:|---:|
+| ETH | EVM | ETH | 1 | 12 |
+| BSC | EVM | BNB | 56 | 15 |
+| TRON | TRON | TRX | NULL | 20 |
+
+---
+
+## 10.2 USDT 合约
+
+| 链 | 类型 | 合约地址 | decimals |
+|---|---|---|---:|
+| ETH | ERC20-USDT | `0xdAC17F958D2ee523a2206206994597C13D831ec7` | 6 |
+| BSC | BEP20-USDT | `0x55d398326f99059fF775485246999027B3197955` | 18 |
+| TRON | TRC20-USDT | `TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj` | 6 |
+
+---
+
+## 10.3 推荐阈值
+
+| 链 | 资产 | 最小归集 | 手续费最低余额 | 补手续费数量 |
+|---|---|---:|---:|---:|
+| ETH | USDT | 50 | 0.003 ETH | 0.005 ETH |
+| BSC | USDT | 10 | 0.003 BNB | 0.005 BNB |
+| TRON | USDT | 10 | 30 TRX | 35 TRX |
+| ETH | ETH | 0.01 | - | - |
+| BSC | BNB | 0.02 | - | - |
+| TRON | TRX | 20 | - | - |
+
+TRON USDT 建议：
+
+```text
+fee_limit = 100000000 SUN
+```
+
+即：
+
+```text
+100 TRX
+```
+
+---
+
+# 11. 金额精度处理
+
+系统中同时保存：
+
+```text
+amount      十进制金额，方便查看
+raw_amount  链上最小单位，方便交易
+```
+
+| 资产 | decimals |
+|---|---:|
+| ETH | 18 |
+| BNB | 18 |
+| TRX | 6 |
+| ERC20-USDT | 6 |
+| BEP20-USDT | 18 |
+| TRC20-USDT | 6 |
+
+金额转换：
+
+```js
+const Decimal = require('decimal.js');
+
+function toRaw(amount, decimals) {
+  return new Decimal(amount)
+    .mul(new Decimal(10).pow(decimals))
+    .toFixed(0);
+}
+
+function fromRaw(raw, decimals) {
+  return new Decimal(raw)
+    .div(new Decimal(10).pow(decimals))
+    .toFixed(decimals);
+}
+
+module.exports = {
+  toRaw,
+  fromRaw
+};
+```
+
+---
+
+# 12. RPC Pool 设计
+
+## 12.1 RPC 节点来源
+
+RPC 节点配置在：
+
+```text
+rpc_endpoint
+```
+
+每条链可配置多个 RPC：
+
+```text
+ETH:
+  Infura
+  Alchemy
+  QuickNode
+  自建节点
+
+BSC:
+  官方节点
+  Ankr
+  自建节点
+
+TRON:
+  TronGrid
+  自建 FullNode
+```
+
+---
+
+## 12.2 第一版切换策略
+
+```text
+1. 按 priority 从小到大选择节点
+2. 当前节点失败，自动切换下一个
+3. fail_count + 1
+4. 连续失败超过阈值，标记 status=2 故障
+5. 定时健康检查恢复
+```
+
+---
+
+## 12.3 RPC 限流
+
+第一版使用进程内限流：
+
+```js
+const Bottleneck = require('bottleneck');
+
+const limiters = {
+  ETH: new Bottleneck({ minTime: 150, maxConcurrent: 5 }),
+  BSC: new Bottleneck({ minTime: 100, maxConcurrent: 10 }),
+  TRON: new Bottleneck({ minTime: 150, maxConcurrent: 5 })
+};
+
+async function limitRpc(chain, fn) {
+  return limiters[chain].schedule(fn);
+}
+
+module.exports = {
+  limitRpc
+};
+```
+
+建议初始配置：
+
+```text
+ETH：每秒 5~10 个请求
+BSC：每秒 10~20 个请求
+TRON：每秒 5~10 个请求
+```
+
+---
+
+# 13. Gas 策略设计
+
+## 13.1 ETH
+
+ETH 使用 EIP-1559：
+
+```text
+maxFeePerGas
+maxPriorityFeePerGas
+```
+
+策略：
+
+```text
+1. provider.getFeeData()
+2. 如果返回 maxFeePerGas，则使用 EIP-1559
+3. 根据 gas_policy 限制最大 gas
+4. 记录 max_fee_per_gas 和 max_priority_fee_per_gas
+```
+
+---
+
+## 13.2 BSC
+
+BSC 使用：
+
+```text
+gasPrice
+```
+
+策略：
+
+```text
+1. provider.getFeeData()
+2. 获取 gasPrice
+3. 根据 gas_policy 限制 min/max gasPrice
+4. 记录 gas_price
+```
+
+---
+
+## 13.3 TRON
+
+TRON 不使用 EVM gas 逻辑。
+
+TRC20 转账使用：
+
+```text
+feeLimit
+```
+
+建议：
+
+```text
+100000000 SUN
+```
+
+即：
+
+```text
+100 TRX
+```
+
+---
+
+# 14. EVM Nonce Manager 设计
+
+## 14.1 使用范围
+
+需要 nonce 管理的链：
+
+```text
+ETH
+BSC
+```
+
+需要 nonce 管理的地址：
+
+```text
+1. 用户地址发 ETH/BNB 主币归集
+2. 用户地址发 ERC20/BEP20-USDT 归集
+3. 手续费钱包发 ETH/BNB 补手续费
+```
+
+---
+
+## 14.2 分配规则
+
+发送交易前：
+
+```text
+1. 开启 MySQL 事务
+2. SELECT nonce_state FOR UPDATE
+3. 获取链上 pending nonce
+4. nonce = max(local_next_nonce, chain_pending_nonce)
+5. 更新 next_nonce = nonce + 1
+6. 提交事务
+7. 使用该 nonce 构造交易
+```
+
+---
+
+## 14.3 伪代码
+
+```js
+async function allocateNonce(chain, address, provider, conn) {
+  const now = Math.floor(Date.now() / 1000);
+
+  let row = await conn.queryOne(`
+    SELECT *
+    FROM nonce_state
+    WHERE chain = ? AND address = ?
+    FOR UPDATE
+  `, [chain, address]);
+
+  const chainPendingNonce = await provider.getTransactionCount(address, 'pending');
+  const chainLatestNonce = await provider.getTransactionCount(address, 'latest');
+
+  if (!row) {
+    await conn.execute(`
+      INSERT INTO nonce_state
+      (
+        chain, address, next_nonce,
+        last_chain_nonce, last_pending_nonce,
+        status, created_at, updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+    `, [
+      chain,
+      address,
+      chainPendingNonce + 1,
+      chainLatestNonce,
+      chainPendingNonce,
+      now,
+      now
+    ]);
+
+    return chainPendingNonce;
+  }
+
+  const localNextNonce = row.next_nonce ?? chainPendingNonce;
+  const nonce = Math.max(Number(localNextNonce), Number(chainPendingNonce));
+
+  await conn.execute(`
+    UPDATE nonce_state
+    SET next_nonce = ?,
+        last_chain_nonce = ?,
+        last_pending_nonce = ?,
+        updated_at = ?
+    WHERE id = ?
+  `, [
+    nonce + 1,
+    chainLatestNonce,
+    chainPendingNonce,
+    now,
+    row.id
+  ]);
+
+  return nonce;
+}
+```
+
+---
+
+## 14.4 第一版不做自动 replacement
+
+第一版不自动做：
+
+```text
+same nonce + higher gas 替换交易
+```
+
+原因：
+
+```text
+逻辑复杂
+容易误判
+资金系统风险高
+```
+
+第一版策略：
+
+```text
+pending 超时 → 标记异常 → 告警 → 人工检查或谨慎重试
+```
+
+---
+
+# 15. 定时任务设计
+
+## 15.1 `addressSyncJob`
+
+职责：
+
+```text
+同步业务库 status=1 地址
+```
+
+频率：
+
+```text
+每 10~30 秒
+```
+
+业务库 SQL：
+
+```sql
+SELECT
+  id,
+  user_id,
+  address,
+  coin,
+  status,
+  chain,
+  addtime
+FROM tl_trade_address
+WHERE status = 1
+  AND address IS NOT NULL
+  AND address != ''
+  AND chain IS NOT NULL
+  AND chain != ''
+ORDER BY id ASC
+LIMIT 500;
+```
+
+处理逻辑：
+
+```text
+1. 标准化 chain
+2. 标准化 address
+3. 查询 wallet_key
+4. 找到则写入 wallet_address.status=1
+5. 找不到则 wallet_address.status=3，并写 system_alert
+```
+
+---
+
+## 15.2 `balanceScanJob`
+
+职责：
+
+```text
+扫描启用地址的主币和 USDT 余额
+```
+
+扫描策略：
+
+```text
+1. 按 chain 分批
+2. 按 last_scan_time 升序
+3. 每批 ETH 100 个、BSC 200 个、TRON 100 个
+4. 每条链独立限流
+5. 扫描完成更新 last_scan_time
+6. 更新 address_balance
+7. 达到阈值则创建 collect_task
+```
+
+---
+
+## 15.3 `collectJob`
+
+职责：
+
+```text
+执行主币归集和 Token 归集
+```
+
+处理状态：
+
+```text
+status = 0 待处理
+status = 3 待归集
+```
+
+流程：
+
+```text
+1. 领取任务并加 MySQL 锁
+2. 重新查询链上余额
+3. 判断是否仍满足归集条件
+4. 如果是 Token，检查主币手续费余额
+5. 手续费不足，任务改为 1 待补手续费
+6. 手续费充足，解密用户私钥
+7. EVM 链分配 nonce
+8. 获取 Gas 参数
+9. 发送交易
+10. 写 chain_transaction
+11. 更新 collect_task 状态
+12. 写 task_status_log
+```
+
+---
+
+## 15.4 `feeJob`
+
+职责：
+
+```text
+给 Token 归集地址补手续费
+```
+
+处理状态：
+
+```text
+status = 1 待补手续费
+```
+
+流程：
+
+```text
+1. 领取待补手续费任务
+2. 查询对应链 fee_wallet
+3. 查询 fee_wallet 余额
+4. 如果手续费钱包余额不足，写 system_alert
+5. 解密 fee_wallet 私钥
+6. EVM 链分配 fee_wallet nonce
+7. 发送 ETH/BNB/TRX 到用户地址
+8. 写 chain_transaction
+9. 更新任务为 2 补手续费中
+10. 写 task_status_log
+```
+
+---
+
+## 15.5 `monitorJob`
+
+职责：
+
+```text
+监控已广播交易确认状态
+```
+
+处理对象：
+
+```text
+chain_transaction.status = 1
+```
+
+流程：
+
+```text
+1. 查询已广播交易
+2. 通过 rpcService 查询交易 receipt / transaction info
+3. 判断交易是否成功
+4. 判断确认数是否达到 confirm_blocks
+5. 补手续费交易成功：
+      collect_task.status = 3
+6. 归集交易成功：
+      collect_task.status = 6
+      删除 collect_task_open
+7. 交易失败：
+      chain_transaction.status = 3
+      collect_task 进入失败或重试
+8. 当前时间超过 expire_at：
+      chain_transaction.status = 4
+      写 system_alert
+```
+
+---
+
+## 15.6 `retryJob`
+
+职责：
+
+```text
+处理可重试任务
+```
+
+可重试：
+
+```text
+RPC 超时
+网络异常
+临时查询失败
+手续费不足后已补充
+```
+
+不可直接重试：
+
+```text
+私钥解密失败
+地址缺私钥
+链上交易明确失败
+归集交易 pending 超时但状态不明
+```
+
+重试间隔：
+
+```text
+第 1 次：60 秒
+第 2 次：300 秒
+第 3 次：900 秒
+第 4 次：3600 秒
+超过 max_retry：失败并告警
+```
+
+---
+
+# 16. MySQL 任务锁设计
+
+第一版不用 Redis，使用 MySQL 字段锁。
+
+## 16.1 领取任务
+
+```sql
+UPDATE collect_task
+SET locked_by = ?, locked_until = ?, updated_at = ?
+WHERE id = ?
+  AND status IN (0, 3)
+  AND (locked_until IS NULL OR locked_until < UNIX_TIMESTAMP());
+```
+
+影响行数为 1：
+
+```text
+领取成功
+```
+
+影响行数为 0：
+
+```text
+任务已被其他 worker 或当前锁未过期
+```
+
+---
+
+## 16.2 锁超时
+
+建议：
+
+```text
+collectJob：60 秒
+feeJob：60 秒
+retryJob：60 秒
+```
+
+---
+
+## 16.3 释放锁
+
+```sql
+UPDATE collect_task
+SET locked_by = NULL,
+    locked_until = 0,
+    updated_at = ?
+WHERE id = ?;
+```
+
+---
+
+# 17. 幂等设计
+
+## 17.1 任务幂等
+
+通过：
+
+```text
+collect_task_open
+```
+
+控制同一地址同一币种只能有一个未完成任务。
+
+任务 key：
+
+```text
+chain:symbol:from_address
+```
+
+示例：
+
+```text
+ETH:USDT:0xabc
+BSC:USDT:0xabc
+TRON:USDT:Txxx
+ETH:ETH:0xabc
+BSC:BNB:0xabc
+TRON:TRX:Txxx
+```
+
+---
+
+## 17.2 交易幂等
+
+发送前检查：
+
+```text
+fee_tx_hash
+collect_tx_hash
+chain_transaction
+```
+
+规则：
+
+```text
+如果已有 tx_hash，不允许再次发送
+只能由 monitorJob 继续监控
+```
+
+---
+
+# 18. Pending 超时机制
+
+## 18.1 超时时间
+
+广播交易时设置：
+
+```text
+ETH：30 分钟
+BSC：15 分钟
+TRON：10 分钟
+```
+
+写入：
+
+```text
+chain_transaction.expire_at
+```
+
+---
+
+## 18.2 超时处理
+
+```text
+如果当前时间 > expire_at
+且交易仍未成功确认
+则：
+  chain_transaction.status = 4
+  写 system_alert
+```
+
+第一版策略：
+
+```text
+补手续费交易超时：
+  可退回待补手续费，等待 retryJob
+
+归集交易超时：
+  不自动重复发送
+  标记异常并告警
+```
+
+原因：
+
+```text
+归集交易可能已经广播成功但 RPC 暂时查不到
+重复发送存在资金风险
+```
+
+---
+
+# 19. 系统告警设计
+
+第一版告警只入库，不强制接第三方通知。
+
+建议告警类型：
+
+```text
+WALLET_KEY_NOT_FOUND
+FEE_WALLET_LOW_BALANCE
+RPC_ERROR
+RPC_ENDPOINT_DOWN
+TX_PENDING_TIMEOUT
+PRIVATE_KEY_DECRYPT_FAILED
+NONCE_ERROR
+GAS_TOO_HIGH
+COLLECT_FAILED
+FEE_TOPUP_FAILED
+```
+
+后续可接入：
+
+```text
+邮件
+短信
+Telegram
+飞书
+企业微信
+```
+
+---
+
+# 20. 日志设计
+
+使用 `winston`。
+
+日志文件：
+
+```text
+logs/app.log
+logs/error.log
+logs/collect.log
+logs/transaction.log
+```
+
+允许记录：
+
+```text
+task_no
+task_id
+chain
+symbol
+from_address
+to_address
+tx_hash
+nonce
+status
+error_msg
+```
+
+严禁记录：
+
+```text
+privateKey
+WALLET_MASTER_KEY
+private_key_cipher
+private_key_iv
+private_key_tag
+```
+
+---
+
+# 21. 地址生成方案
+
+第一版建议使用：
+
+```text
+预生成地址池
+```
+
+流程：
+
+```text
+1. 归集系统批量生成地址
+2. 私钥加密保存到 wallet_key
+3. 地址写入业务库 tl_trade_address，status=0
+4. 业务系统分配地址时更新 status=1
+5. 归集系统同步 status=1 地址
+```
+
+---
+
+## 21.1 EVM 地址生成
+
+```js
+const { Wallet } = require('ethers');
+
+function createEvmWallet() {
+  const wallet = Wallet.createRandom();
+
+  return {
+    address: wallet.address,
+    privateKey: wallet.privateKey
+  };
+}
+```
+
+---
+
+## 21.2 TRON 地址生成
+
+```js
+const TronWeb = require('tronweb');
+
+async function createTronWallet() {
+  const account = await TronWeb.createAccount();
+
+  return {
+    address: account.address.base58,
+    addressHex: account.address.hex,
+    privateKey: account.privateKey
+  };
+}
+```
+
+---
+
+# 22. 链适配器设计
+
+统一接口：
+
+```js
+class ChainAdapter {
+  async getMainBalance(address) {}
+  async getTokenBalance(address, contractAddress) {}
+  async sendMain(privateKey, toAddress, rawAmount, options) {}
+  async sendToken(privateKey, contractAddress, toAddress, rawAmount, options) {}
+  async getTransactionReceipt(txHash) {}
+  async getCurrentBlockNumber() {}
+}
+```
+
+---
+
+## 22.1 EVM Adapter
+
+适用于：
+
+```text
+ETH
+BSC
+```
+
+功能：
+
+```text
+查询主币余额
+查询 ERC20/BEP20 余额
+发送主币
+发送 ERC20/BEP20
+查询 receipt
+查询当前区块
+支持 nonce
+支持 gasPrice
+支持 EIP-1559
+```
+
+---
+
+## 22.2 TRON Adapter
+
+适用于：
+
+```text
+TRON
+```
+
+功能：
+
+```text
+查询 TRX 余额
+查询 TRC20-USDT 余额
+发送 TRX
+发送 TRC20-USDT
+查询交易状态
+查询当前区块
+支持 feeLimit
+```
+
+---
+
+# 23. 环境变量配置
+
+`.env` 示例：
+
+```env
+NODE_ENV=production
+
+# 业务库，只读
+BIZ_DB_HOST=127.0.0.1
+BIZ_DB_PORT=3306
+BIZ_DB_USER=collector_ro
+BIZ_DB_PASSWORD=strong_password
+BIZ_DB_NAME=cadd
+
+# 归集库，读写
+COLLECTOR_DB_HOST=127.0.0.1
+COLLECTOR_DB_PORT=3306
+COLLECTOR_DB_USER=collector_rw
+COLLECTOR_DB_PASSWORD=strong_password
+COLLECTOR_DB_NAME=collector
+
+# 私钥加密主密钥，64位hex
+WALLET_MASTER_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+WORKER_ID=collector-001
+```
+
+RPC 地址不建议全部写死在 `.env`，建议写入：
+
+```text
+rpc_endpoint
+```
+
+---
+
+# 24. 数据库权限
+
+## 24.1 业务库账号
+
+只读权限：
+
+```sql
+CREATE USER 'collector_ro'@'%' IDENTIFIED BY '强密码';
+
+GRANT SELECT ON cadd.tl_trade_address TO 'collector_ro'@'%';
+
+FLUSH PRIVILEGES;
+```
+
+---
+
+## 24.2 归集库账号
+
+读写权限：
+
+```sql
+CREATE USER 'collector_rw'@'%' IDENTIFIED BY '强密码';
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON collector.* TO 'collector_rw'@'%';
+
+FLUSH PRIVILEGES;
+```
+
+禁止使用：
+
+```text
+root
+```
+
+运行归集程序。
+
+---
+
+# 25. 部署方案
+
+第一版使用 PM2 单进程部署。
+
+```bash
+npm install
+pm2 start src/app.js --name collector-service
+pm2 logs collector-service
+pm2 save
+pm2 startup
+```
+
+---
+
+## 25.1 第一版进程模型
+
+一个 Node.js 进程内运行：
+
+```text
+addressSyncJob
+balanceScanJob
+collectJob
+feeJob
+monitorJob
+retryJob
+```
+
+优点：
+
+```text
+结构简单
+排查方便
+不需要 Redis 锁
+不需要 MQ
+降低上线风险
+```
+
+---
+
+# 26. 第一版不做的内容
+
+明确不做：
+
+```text
+1. Redis
+2. BullMQ
+3. Kafka/RabbitMQ
+4. KMS/HSM
+5. 签名服务
+6. 区块事件监听
+7. 自动 gas replacement
+8. TRON 能量租赁
+9. 多机部署
+10. 冷钱包自动转账
+11. 后台人工审核系统
+```
+
+---
+
+# 27. 第一版必须实现清单
+
+## P0 必须实现
+
+```text
+1. 业务库和归集库双连接
+2. wallet_key 私钥 AES-256-GCM 加密
+3. 地址生成和地址池写入
+4. addressSyncJob 同步 status=1 地址
+5. ETH/BSC/TRON 链适配器
+6. balanceScanJob 余额扫描
+7. collect_task 任务创建
+8. collect_task_open 幂等控制
+9. collectJob 归集执行
+10. feeJob 补手续费
+11. monitorJob 交易确认
+12. retryJob 失败重试
+13. nonce_state + nonceService
+14. rpc_endpoint + rpcService
+15. RPC 限流
+16. gas_policy + gasService
+17. chain_transaction 完整记录 nonce/gas/expire_at
+18. pending 超时处理
+```
+
+---
+
+## P1 强烈建议实现
+
+```text
+1. task_status_log
+2. system_alert
+3. collector_state
+4. 日志脱敏
+5. 手续费钱包余额告警
+6. RPC 节点健康检查
+```
+
+---
+
+# 28. 后续演进路线
+
+## V2：队列化
+
+```text
+Redis
+BullMQ
+scan-worker
+collect-worker
+monitor-worker
+```
+
+---
+
+## V3：事件驱动
+
+```text
+EVM Transfer Event
+TRON Event
+区块监听
+余额变化触发任务
+```
+
+---
+
+## V4：签名隔离
+
+```text
+sign-service
+归集服务不直接接触私钥
+```
+
+---
+
+## V5：高级安全
+
+```text
+KMS
+HSM
+MPC
+按链解锁密码
+冷热钱包风控
+```
+
+---
+
+# 29. 最终结论
+
+本 V1 方案是一个：
+
+```text
+Node.js + MySQL + ethers + tronweb
+单机生产稳定版多链归集系统
+```
+
+它不追求一开始就做成复杂的钱包中台，而是优先实现：
+
+```text
+安全存储私钥
+稳定扫描余额
+可靠创建任务
+自动补手续费
+自动归集
+交易确认监控
+EVM nonce 管理
+RPC 容灾
+RPC 限流
+Gas 策略
+Pending 超时告警
+任务幂等和审计
+```
+
+相比普通 Demo 归集程序，本方案已经补齐了第一版生产环境最容易出事故的关键点：
+
+```text
+nonce 冲突
+RPC 单点故障
+RPC 过载
+gas 不可控
+pending 交易卡死
+任务重复执行
+交易状态不可追踪
+私钥明文存储
+```
+
+因此，最终第一版推荐定位为：
+
+```text
+单机可生产
+MySQL 驱动
+任务轮询型
+三链自动归集系统
+```
+
+后续再根据业务规模逐步升级到：
+
+```text
+队列化
+事件驱动
+签名服务化
+KMS/HSM
+多机高可用
+```

@@ -1,0 +1,24 @@
+{
+  "version": "1.0",
+  "updated_at": "2026-06-24",
+  "edges": [
+    {
+      "from": "decision-003",
+      "to": "decision-004",
+      "type": "refined_by",
+      "note": "004 是 003 的 production fixes"
+    },
+    {
+      "from": "decision-002",
+      "to": "gotcha-deploy-version-sync",
+      "type": "prevents",
+      "note": "API 审查减少需求遗漏导致的返工部署"
+    },
+    {
+      "from": "decision-001",
+      "to": "decision-002",
+      "type": "enables",
+      "note": "持久化工作空间使 PM 能实际审查 API 实现"
+    }
+  ]
+}

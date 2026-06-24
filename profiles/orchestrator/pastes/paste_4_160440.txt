@@ -1,0 +1,14 @@
+Create New Short Link
+Destination URL *
+https://openai.com/zh-Hans-CN/index/harness-engineering/
+Not Found
+
+Title (optional)
+My awesome link
+Custom Short Code (optional)
+my-custom-code
+Letters, numbers, hyphens, and underscores only
+
+Expires in (days) (optional)
+30
+Create Short Link

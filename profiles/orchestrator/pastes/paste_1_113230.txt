@@ -1,0 +1,1155 @@
+下面是最终版**可执行、可落地、可开发的完整技术方案**。这版按你最新的方向重新整理：参考 X 帖子的“少量高质量交易 + AI 复盘 + Hermes 调度 + Telegram 通知”思路，但不照搬夸张收益叙事；界面采用你附件那种**黑绿赛博技术驾驶舱风格**，不是传统 Metabase 风格。
+
+---
+
+# 一、项目定位
+
+项目名称建议：
+
+```text
+polymarket-hermes-agent-cockpit
+```
+
+项目目标：
+
+```text
+1. 自动采集 Polymarket 市场数据
+2. 用 Rust 监听实时订单簿和价格变化
+3. 用 Python/FastAPI 做 AI 策略分析、风控、模拟盘和报告
+4. 用 Hermes 做多 Agent 调度、日报、复盘、Telegram 通知
+5. 用 Next.js 做黑绿赛博风 Dashboard
+6. 用 PostgreSQL 保存审计数据
+7. 用 Redis Streams 做内部事件队列
+8. 第一阶段只跑 Paper Trade，不自动真钱下注
+```
+
+Polymarket 官方文档显示，Gamma API 和 Data API 是公开接口，不需要认证；CLOB API 有公开的订单簿、价格接口，也有需要认证的订单管理接口，所以第一版只做只读数据和模拟盘是最稳的。([docs.polymarket.com][1])
+
+---
+
+# 二、最终技术架构
+
+```text
+┌────────────────────────────────────┐
+│          Next.js Dashboard          │
+│ 登录 / 菜单 / 图表 / 信号 / 风控 / 复盘 │
+└─────────────────┬──────────────────┘
+                  │ REST API
+                  ▼
+┌────────────────────────────────────┐
+│          Python Strategy API        │
+│ FastAPI / AI分析 / 风控 / 模拟盘 / 报告 │
+└────────────┬──────────────┬────────┘
+             │              │
+             │              ▼
+             │        ┌──────────────┐
+             │        │ Hermes Agent │
+             │        │ 日报/复盘/通知 │
+             │        └──────────────┘
+             │
+             ▼
+┌────────────────────────────────────┐
+│             PostgreSQL              │
+│ markets / snapshots / signals / logs │
+└─────────────────▲──────────────────┘
+                  │
+                  │ XREADGROUP
+                  ▼
+┌────────────────────────────────────┐
+│              Redis                  │
+│ Streams / Cache / Lock / Latest Book │
+└─────────────────▲──────────────────┘
+                  │ XADD
+                  ▼
+┌────────────────────────────────────┐
+│          Rust Market Engine         │
+│ WebSocket / Orderbook / Latency / 指标 │
+└─────────────────┬──────────────────┘
+                  │
+                  ▼
+┌────────────────────────────────────┐
+│          Polymarket CLOB            │
+│ REST / WebSocket / Market Channel    │
+└────────────────────────────────────┘
+```
+
+Polymarket 官方 WebSocket 文档说明，`market` channel 可订阅 asset IDs，并接收 orderbook snapshots、price changes、trade executions 和 market events；实时订单簿应该优先用 WebSocket，而不是频繁 REST 轮询。([docs.polymarket.com][2])
+
+---
+
+# 三、核心设计原则
+
+## 1. 不做“自动暴富机器人”
+
+X 帖子的参考价值在于：
+
+```text
+少量交易
+读订单簿
+算概率差
+AI 复盘
+Hermes 调度
+Telegram 通知
+```
+
+但不能照搬：
+
+```text
+500 美元变 88 万美元
+30 分钟无需编码
+AI 自动改 .env
+全自动真钱下注
+忽略合规和地区限制
+```
+
+## 2. 第一阶段只做 Paper Trade
+
+```text
+TRADE_ENABLED=false
+PAPER_TRADE_ONLY=true
+ENABLE_ORDER_EXECUTION=false
+```
+
+即使后期加入交易执行，也必须先走：
+
+```text
+AI 生成信号 → 风控通过 → 用户人工确认 → 系统执行限价单
+```
+
+Polymarket CLOB 是链下撮合、链上结算的混合系统，订单是 EIP-712 签名消息；涉及交易时必须处理认证、签名、订单生命周期和风控，所以第一版不应接私钥。([docs.polymarket.com][3])
+
+---
+
+# 四、模块拆分
+
+## 1. `dashboard-web`：Next.js 前端
+
+技术栈：
+
+```text
+Next.js
+TypeScript
+Tailwind CSS
+shadcn/ui
+Recharts 或 ECharts
+TanStack Table
+```
+
+页面：
+
+```text
+/login
+/dashboard
+/dashboard/markets
+/dashboard/signals
+/dashboard/signals/[id]
+/dashboard/paper-trades
+/dashboard/review
+/dashboard/infra
+/dashboard/risk
+/dashboard/settings
+```
+
+Next.js App Router 支持在 Server Components 中通过 `fetch`、ORM 或数据库直接获取数据，也适合把 API key、token 等敏感信息放在服务端而不是浏览器端。([nextjs.org][4])
+
+## 2. `strategy-api`：Python 策略服务
+
+职责：
+
+```text
+1. 市场基础信息采集
+2. CLOB REST 价格采集
+3. AI 分析市场规则、新闻和概率
+4. 计算 edge / effective_edge
+5. 执行风控规则
+6. 生成 SKIP / WATCH / PAPER_TRADE 信号
+7. 创建模拟交易
+8. 生成日报、周报、复盘
+9. 提供 Dashboard API
+10. 消费 Redis Streams 实时行情事件
+```
+
+## 3. `market-engine-rs`：Rust 实时行情引擎
+
+职责：
+
+```text
+1. 连接 Polymarket WebSocket
+2. 订阅重点 market asset IDs
+3. 接收 orderbook snapshot
+4. 接收 price_change / last_trade_price
+5. 在内存维护订单簿
+6. 计算 midpoint / spread / depth / imbalance
+7. 写入 Redis Streams
+8. 写入 Redis 最新盘口 Hash
+9. 记录延迟 metrics
+```
+
+Rust 只做速度敏感部分，不做 AI 分析，不做交易决策。
+
+## 4. `hermes`：AI 调度与复盘
+
+Hermes 负责：
+
+```text
+1. 每 30 分钟触发市场扫描
+2. 每天生成早报
+3. 每天生成晚间复盘
+4. 调用 Strategy API
+5. 通过 Telegram 推送信号和复盘
+6. 管理 Market Scanner、Risk Manager、Journal Agent 等多 Agent
+```
+
+Hermes 官方描述其具备内置学习循环、技能沉淀和跨会话记忆，并可运行在 VPS、GPU 集群或 serverless 环境，也支持通过 Telegram 与云端 Agent 交互，适合做这个系统的调度层。([GitHub][5])
+
+---
+
+# 五、项目目录结构
+
+```text
+polymarket-hermes-agent-cockpit/
+├── docker-compose.yml
+├── .env.example
+├── README.md
+│
+├── dashboard-web/
+│   ├── Dockerfile
+│   ├── package.json
+│   ├── next.config.ts
+│   ├── tailwind.config.ts
+│   ├── app/
+│   │   ├── login/page.tsx
+│   │   ├── dashboard/page.tsx
+│   │   ├── dashboard/markets/page.tsx
+│   │   ├── dashboard/signals/page.tsx
+│   │   ├── dashboard/signals/[id]/page.tsx
+│   │   ├── dashboard/paper-trades/page.tsx
+│   │   ├── dashboard/review/page.tsx
+│   │   ├── dashboard/infra/page.tsx
+│   │   ├── dashboard/risk/page.tsx
+│   │   └── dashboard/settings/page.tsx
+│   ├── components/
+│   │   ├── layout/
+│   │   ├── charts/
+│   │   ├── tables/
+│   │   └── cards/
+│   └── lib/
+│       ├── api.ts
+│       ├── auth.ts
+│       ├── types.ts
+│       └── format.ts
+│
+├── strategy-api/
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   ├── alembic.ini
+│   ├── app/
+│   │   ├── main.py
+│   │   ├── config.py
+│   │   ├── db.py
+│   │   ├── models.py
+│   │   ├── scheduler.py
+│   │   ├── collector/
+│   │   │   ├── gamma_client.py
+│   │   │   ├── clob_client.py
+│   │   │   └── news_client.py
+│   │   ├── analyzer/
+│   │   │   ├── market_filter.py
+│   │   │   ├── llm_judge.py
+│   │   │   └── scoring.py
+│   │   ├── risk/
+│   │   │   ├── rules.py
+│   │   │   └── position.py
+│   │   ├── paper/
+│   │   │   ├── simulator.py
+│   │   │   └── settlement.py
+│   │   ├── realtime/
+│   │   │   └── redis_stream_consumer.py
+│   │   ├── reports/
+│   │   │   ├── daily.py
+│   │   │   └── weekly.py
+│   │   └── routers/
+│   │       ├── auth.py
+│   │       ├── markets.py
+│   │       ├── signals.py
+│   │       ├── paper_trades.py
+│   │       ├── reports.py
+│   │       └── dashboard.py
+│
+├── market-engine-rs/
+│   ├── Dockerfile
+│   ├── Cargo.toml
+│   └── src/
+│       ├── main.rs
+│       ├── config.rs
+│       ├── ws/
+│       │   ├── polymarket_ws.rs
+│       │   └── orderbook.rs
+│       ├── signals/
+│       │   ├── spread.rs
+│       │   ├── liquidity.rs
+│       │   └── imbalance.rs
+│       ├── storage/
+│       │   ├── redis.rs
+│       │   └── postgres.rs
+│       └── api/
+│           └── health.rs
+│
+├── execution-engine-rs/
+│   └── README.md      # 后期预留，第一版不启用
+│
+└── hermes/
+    ├── SOUL.md
+    ├── prompts/
+    │   ├── orchestrator.md
+    │   ├── market_scanner.md
+    │   ├── rule_reader.md
+    │   ├── news_analyst.md
+    │   ├── probability_analyst.md
+    │   ├── odds_analyst.md
+    │   ├── risk_manager.md
+    │   └── journal_agent.md
+    └── cron/
+        ├── morning_report.md
+        ├── scan_markets_30min.md
+        └── nightly_review.md
+```
+
+---
+
+# 六、Redis Streams 设计
+
+你不需要 GCP Pub/Sub。这里用的是 Redis 自带的 Streams。
+
+Redis Streams 支持以流的形式追加记录，`XREADGROUP` 支持 consumer group 消费，适合多个 worker 可靠消费行情事件。([Redis][6])
+
+## 1. Stream 名称
+
+```text
+realtime_market_events
+```
+
+## 2. Rust 写入事件
+
+```text
+XADD realtime_market_events *
+  market_id 123
+  token_id xxx
+  best_bid 0.31
+  best_ask 0.34
+  midpoint 0.325
+  spread 0.03
+  bid_depth_1pct 12000
+  ask_depth_1pct 9800
+  imbalance 0.62
+  event_time 2026-05-26T12:00:00Z
+```
+
+## 3. Python 消费事件
+
+```text
+XREADGROUP GROUP strategy_group strategy_worker_1
+  COUNT 50
+  BLOCK 5000
+  STREAMS realtime_market_events >
+```
+
+## 4. Redis Key 规划
+
+```text
+realtime_market_events              # Redis Stream
+market_snapshot:{token_id}          # 最新盘口 Hash
+signal_lock:{market_id}             # 防重复生成信号
+collector_lock                      # 防止多个采集任务重复跑
+latency:{region}:{endpoint}         # 延迟监控缓存
+```
+
+---
+
+# 七、数据库设计
+
+## 1. 用户表
+
+```sql
+CREATE TABLE users (
+    id BIGSERIAL PRIMARY KEY,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    role TEXT DEFAULT 'admin',
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+```
+
+## 2. 市场表
+
+```sql
+CREATE TABLE markets (
+    id BIGSERIAL PRIMARY KEY,
+    polymarket_market_id TEXT UNIQUE,
+    event_id TEXT,
+    slug TEXT,
+    question TEXT NOT NULL,
+    description TEXT,
+    category TEXT,
+    end_time TIMESTAMPTZ,
+    active BOOLEAN DEFAULT TRUE,
+    closed BOOLEAN DEFAULT FALSE,
+    enable_order_book BOOLEAN DEFAULT FALSE,
+    yes_token_id TEXT,
+    no_token_id TEXT,
+    resolution_source TEXT,
+    rules_text TEXT,
+    raw_json JSONB,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+```
+
+## 3. 市场快照表
+
+```sql
+CREATE TABLE market_snapshots (
+    id BIGSERIAL PRIMARY KEY,
+    market_id BIGINT REFERENCES markets(id),
+    yes_price NUMERIC(10,4),
+    no_price NUMERIC(10,4),
+    best_bid NUMERIC(10,4),
+    best_ask NUMERIC(10,4),
+    midpoint NUMERIC(10,4),
+    spread NUMERIC(10,4),
+    liquidity NUMERIC(18,2),
+    volume_24h NUMERIC(18,2),
+    captured_at TIMESTAMPTZ DEFAULT now()
+);
+```
+
+## 4. 实时盘口表
+
+```sql
+CREATE TABLE realtime_orderbook_snapshots (
+    id BIGSERIAL PRIMARY KEY,
+    market_id BIGINT REFERENCES markets(id),
+    token_id TEXT NOT NULL,
+    best_bid NUMERIC(10,4),
+    best_ask NUMERIC(10,4),
+    midpoint NUMERIC(10,4),
+    spread NUMERIC(10,4),
+    bid_depth_1pct NUMERIC(18,2),
+    ask_depth_1pct NUMERIC(18,2),
+    imbalance NUMERIC(10,4),
+    raw_json JSONB,
+    event_time TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+```
+
+## 5. AI 信号表
+
+```sql
+CREATE TABLE signals (
+    id BIGSERIAL PRIMARY KEY,
+    market_id BIGINT REFERENCES markets(id),
+    side TEXT CHECK (side IN ('YES', 'NO')),
+    market_price NUMERIC(10,4),
+    ai_probability NUMERIC(10,4),
+    edge NUMERIC(10,4),
+    effective_edge NUMERIC(10,4),
+    confidence NUMERIC(10,4),
+    liquidity_score NUMERIC(10,4),
+    rule_clarity_score NUMERIC(10,4),
+    news_quality_score NUMERIC(10,4),
+    recommendation TEXT CHECK (recommendation IN ('SKIP', 'WATCH', 'PAPER_TRADE')),
+    reason TEXT,
+    risk TEXT,
+    what_would_change_my_mind TEXT,
+    raw_analysis JSONB,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+```
+
+## 6. 模拟交易表
+
+```sql
+CREATE TABLE paper_trades (
+    id BIGSERIAL PRIMARY KEY,
+    signal_id BIGINT REFERENCES signals(id),
+    market_id BIGINT REFERENCES markets(id),
+    side TEXT CHECK (side IN ('YES', 'NO')),
+    entry_price NUMERIC(10,4),
+    size_usd NUMERIC(18,2),
+    current_price NUMERIC(10,4),
+    exit_price NUMERIC(10,4),
+    pnl_usd NUMERIC(18,2),
+    status TEXT CHECK (status IN ('OPEN', 'CLOSED', 'VOID')),
+    entry_reason TEXT,
+    exit_reason TEXT,
+    opened_at TIMESTAMPTZ DEFAULT now(),
+    closed_at TIMESTAMPTZ
+);
+```
+
+## 7. AI 参数建议表
+
+```sql
+CREATE TABLE strategy_config_suggestions (
+    id BIGSERIAL PRIMARY KEY,
+    key TEXT NOT NULL,
+    old_value TEXT,
+    suggested_value TEXT NOT NULL,
+    reason TEXT,
+    status TEXT CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED', 'ROLLED_BACK')) DEFAULT 'PENDING',
+    created_by TEXT DEFAULT 'ai_review_agent',
+    created_at TIMESTAMPTZ DEFAULT now(),
+    reviewed_at TIMESTAMPTZ
+);
+```
+
+这张表非常关键，用来替代 X 帖子里“AI 每晚自动改 `.env`”的危险做法。
+
+---
+
+# 八、策略与风控规则
+
+## 1. 第一版策略
+
+```text
+短期事件赔率偏差策略
+```
+
+只做：
+
+```text
+1. 规则清晰
+2. 结算时间 24 小时 - 7 天
+3. 流动性足够
+4. 点差足够小
+5. 模型概率明显高于市场隐含概率
+6. 能解释市场为什么可能定价错误
+```
+
+## 2. Edge 计算
+
+```python
+edge = ai_probability - market_price
+effective_edge = ai_probability - market_price - spread - safety_margin
+```
+
+默认参数：
+
+```text
+SAFETY_MARGIN=0.03
+MIN_EDGE=0.08
+MIN_CONFIDENCE=0.65
+MIN_LIQUIDITY_USD=10000
+MAX_SPREAD=0.08
+MAX_DAILY_SIGNALS=10
+MAX_DAILY_PAPER_TRADES=5
+```
+
+## 3. 强制风控
+
+```text
+1. TRADE_ENABLED=false
+2. PAPER_TRADE_ONLY=true
+3. ENABLE_ORDER_EXECUTION=false
+4. 每天最多 5 个 Paper Trade
+5. 单个模拟仓位不超过模拟资金 1.25%
+6. 连续亏损 3 单自动暂停
+7. 日亏损超过 3% 自动暂停
+8. 规则不清晰不做
+9. 点差过大不做
+10. 流动性不足不做
+11. 涉及战争、恐袭、暗杀、军事、内幕信息直接跳过
+12. AI 不能直接修改生产配置
+13. AI 不能直接控制私钥
+14. AI 不能自动真钱下注
+```
+
+---
+
+# 九、FastAPI 接口设计
+
+## Auth
+
+```text
+POST /auth/login
+POST /auth/logout
+GET  /auth/me
+```
+
+## Markets
+
+```text
+POST /markets/collect
+GET  /markets/active
+GET  /markets/{id}
+GET  /markets/{id}/snapshots
+```
+
+## Realtime
+
+```text
+GET  /realtime/snapshots/latest
+GET  /realtime/snapshots/{market_id}
+GET  /realtime/latency
+POST /realtime/consume
+```
+
+## Signals
+
+```text
+POST /signals/generate
+GET  /signals/latest
+GET  /signals/{id}
+POST /signals/{id}/review
+```
+
+## Paper Trades
+
+```text
+POST /paper-trades/open-from-signal/{signal_id}
+GET  /paper-trades/open
+GET  /paper-trades/closed
+POST /paper-trades/settle
+```
+
+## Review Loop
+
+```text
+POST /review/run-daily
+GET  /review/config-suggestions
+POST /review/config-suggestions/{id}/approve
+POST /review/config-suggestions/{id}/reject
+```
+
+## Dashboard
+
+```text
+GET /dashboard/overview
+GET /dashboard/market-scanner
+GET /dashboard/latest-signals
+GET /dashboard/paper-trades
+GET /dashboard/review-loop
+GET /dashboard/infra-status
+GET /dashboard/risk-board
+```
+
+---
+
+# 十、Hermes 多 Agent 设计
+
+## Agent 列表
+
+```text
+Orchestrator
+Market Scanner
+Rule Reader
+News Analyst
+Probability Analyst
+Odds Analyst
+Risk Manager
+Journal Agent
+Config Review Agent
+Telegram Notify Agent
+```
+
+## Orchestrator Prompt 核心规则
+
+```text
+你是 Polymarket Hermes Research Orchestrator。
+
+你不能自动下注。
+你不能处理私钥。
+你不能绕过地区限制。
+你只能使用公开信息。
+所有信号必须经过 Risk Manager。
+所有配置调整必须写入 strategy_config_suggestions。
+任何 .env 修改必须禁止。
+任何真钱交易必须人工确认。
+```
+
+## Risk Manager Prompt 核心规则
+
+```text
+必须拒绝：
+1. Edge < 8%
+2. Confidence < 65%
+3. Rule clarity < 75%
+4. Spread > 8%
+5. Liquidity < 10000 USD
+6. 涉及内幕、战争、恐袭、军事敏感
+7. 结算规则模糊
+8. 新闻来源不可靠
+9. AI 解释不出市场为什么定价错误
+```
+
+---
+
+# 十一、Dashboard 界面方案
+
+使用你附件里的黑绿技术驾驶舱方向。
+
+## 页面设计
+
+```text
+/login
+/dashboard/overview
+/dashboard/markets
+/dashboard/signals
+/dashboard/paper-trades
+/dashboard/review
+/dashboard/infra
+/dashboard/risk
+/dashboard/settings
+```
+
+## 视觉风格
+
+```text
+深黑背景
+霓虹绿色主色
+卡片玻璃拟态
+技术终端日志
+订单簿曲线
+AI 决策日志
+Rust / Redis / Hermes 架构流
+风控红线面板
+参数审批面板
+```
+
+## 核心页面
+
+### Overview
+
+```text
+Portfolio Simulation
+Total Trades
+Win Rate
+Max Drawdown
+Avg Edge
+AI Decision Stack
+BTC / USD 5 Min Market View
+Production Guardrails
+```
+
+### Market Scanner
+
+```text
+Market
+Price
+Model Probability
+Edge
+Liquidity
+Status
+```
+
+### AI Signals
+
+```text
+模型概率
+市场隐含概率
+Edge
+Confidence
+Reason
+Risk
+What would change my mind
+```
+
+### Review Loop
+
+```text
+Trade Log Ingestion
+AI Review
+Config Suggestion
+Human Approval
+Shadow Test
+Gray Release
+```
+
+### Risk Board
+
+```text
+Daily Loss
+Single Position
+Market Exposure
+Consecutive Loss
+Settlement Ambiguity
+AI Config Write
+Kill Switch
+```
+
+---
+
+# 十二、Docker Compose
+
+```yaml
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: pm_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: polymarket_ai
+      POSTGRES_USER: pm_user
+      POSTGRES_PASSWORD: pm_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7
+    container_name: pm_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  strategy-api:
+    build: ./strategy-api
+    container_name: pm_strategy_api
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+      - redis
+    ports:
+      - "8008:8008"
+
+  market-engine-rs:
+    build: ./market-engine-rs
+    container_name: pm_market_engine_rs
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+      - redis
+    ports:
+      - "8010:8010"
+
+  dashboard-web:
+    build: ./dashboard-web
+    container_name: pm_dashboard_web
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_APP_NAME: "Hermes Polymarket Agent Cockpit"
+      STRATEGY_API_INTERNAL_BASE: "http://strategy-api:8008"
+    depends_on:
+      - strategy-api
+    ports:
+      - "3001:3001"
+
+  hermes:
+    image: nousresearch/hermes-agent:latest
+    container_name: hermes_pm
+    restart: unless-stopped
+    command: gateway run
+    volumes:
+      - ~/.hermes-polymarket:/opt/data
+    environment:
+      HERMES_DASHBOARD: "1"
+      API_SERVER_ENABLED: "true"
+      API_SERVER_HOST: "0.0.0.0"
+      API_SERVER_KEY: ${HERMES_API_SERVER_KEY}
+    depends_on:
+      - strategy-api
+    ports:
+      - "8642:8642"
+
+volumes:
+  postgres_data:
+```
+
+---
+
+# 十三、`.env.example`
+
+```bash
+APP_ENV=dev
+APP_PORT=8008
+
+DATABASE_URL=postgresql+psycopg://pm_user:pm_password@postgres:5432/polymarket_ai
+REDIS_URL=redis://redis:6379/0
+
+POLYMARKET_GAMMA_BASE=https://gamma-api.polymarket.com
+POLYMARKET_CLOB_BASE=https://clob.polymarket.com
+POLYMARKET_DATA_BASE=https://data-api.polymarket.com
+POLYMARKET_WS_URL=wss://ws-subscriptions-clob.polymarket.com/ws/market
+
+OPENAI_API_KEY=你的_key
+AI_MODEL=gpt-4.1-mini
+
+TELEGRAM_BOT_TOKEN=你的_bot_token
+TELEGRAM_CHAT_ID=你的_chat_id
+
+HERMES_API_SERVER_KEY=请用_openssl_rand_hex_32_生成
+JWT_SECRET=请生成一个随机字符串
+
+TRADE_ENABLED=false
+PAPER_TRADE_ONLY=true
+ENABLE_ORDER_EXECUTION=false
+
+MAX_DAILY_SIGNALS=10
+MAX_DAILY_PAPER_TRADES=5
+MIN_EDGE=0.08
+MIN_CONFIDENCE=0.65
+MIN_PROB=0.89
+MIN_LIQUIDITY_USD=10000
+MAX_SPREAD=0.08
+MAX_POSITION_USD=300
+DAILY_LOSS_LIMIT=0.03
+
+REDIS_STREAM_MARKET_EVENTS=realtime_market_events
+REDIS_CONSUMER_GROUP=strategy_group
+REDIS_CONSUMER_NAME=strategy_worker_1
+
+MARKET_ENGINE_PORT=8010
+MARKET_ENGINE_REGION=tokyo
+MARKET_ENGINE_MODE=paper
+ENABLE_REALTIME_WS=true
+```
+
+---
+
+# 十四、开发排期
+
+## 第 1 天：项目骨架
+
+```text
+1. 初始化 Git 仓库
+2. 创建 docker-compose.yml
+3. PostgreSQL / Redis 启动
+4. FastAPI health check
+5. Next.js 登录页
+6. 左侧菜单展开 / 收起
+7. 使用黑绿赛博驾驶舱 UI
+```
+
+## 第 2 天：数据库和认证
+
+```text
+1. Alembic 初始化
+2. users / markets / signals / paper_trades 表
+3. 登录接口
+4. JWT 或 HTTP-only Cookie
+5. 前端登录联调
+```
+
+## 第 3 天：市场采集
+
+```text
+1. Gamma API Client
+2. CLOB REST Client
+3. markets 入库
+4. market_snapshots 入库
+5. Market Scanner 页面展示
+```
+
+## 第 4 天：Rust Market Engine
+
+```text
+1. Rust 项目初始化
+2. WebSocket 连接
+3. 订阅 market channel
+4. 解析 orderbook snapshot
+5. 写入 Redis Streams
+6. 写入最新盘口 Hash
+```
+
+## 第 5 天：Redis Streams 消费
+
+```text
+1. Python XREADGROUP 消费事件
+2. 写 realtime_orderbook_snapshots
+3. 计算 spread / midpoint / imbalance
+4. Dashboard 展示实时盘口
+```
+
+## 第 6 天：AI 分析
+
+```text
+1. LLM Judge
+2. Rule Reader
+3. Probability Analyst
+4. 结构化 JSON 输出
+5. signals 入库
+```
+
+## 第 7 天：风控和模拟盘
+
+```text
+1. Risk Engine
+2. effective_edge 计算
+3. Paper Trade 开仓
+4. Paper Trade PnL
+5. Risk Board 展示
+```
+
+## 第 8 天：Hermes 接入
+
+```text
+1. Orchestrator Prompt
+2. Risk Manager Prompt
+3. Morning Report
+4. Scan Markets 30min
+5. Nightly Review
+6. Telegram Notify Agent
+```
+
+## 第 9 天：Review Loop
+
+```text
+1. strategy_config_suggestions 表
+2. AI 参数建议
+3. 人工审批
+4. Shadow Test 状态
+5. 禁止自动修改 .env
+```
+
+## 第 10 天：联调和部署
+
+```text
+1. 全链路测试
+2. Docker Compose 一键启动
+3. 日志检查
+4. README 部署文档
+5. 30 天 Paper Trade 运行计划
+```
+
+---
+
+# 十五、验收标准
+
+## 第 1 周验收
+
+| 指标                  |       目标 |
+| ------------------- | -------: |
+| 每日采集市场              |    > 500 |
+| Rust WebSocket 稳定运行 |  > 12 小时 |
+| Redis Stream 消息消费   |       正常 |
+| AI 信号               | 3-10 个/天 |
+| Paper Trade         |  1-5 个/天 |
+| Dashboard 页面        |    全部可访问 |
+| 登录/退出               |       正常 |
+| 左侧菜单展开/收起           |       正常 |
+| 自动真钱交易              |        0 |
+
+## 第 30 天验收
+
+| 指标     |        目标 |
+| ------ | --------: |
+| 模拟交易数量 |    >= 100 |
+| 最大回撤   |     < 20% |
+| 规则误读率  |      < 5% |
+| 复盘完整率  |      100% |
+| 模拟 ROI | 正数才考虑下一阶段 |
+| 自动真钱交易 |      仍然禁用 |
+
+Polymarket API 的限速由 Cloudflare throttling 执行，超过限制时请求会被延迟或排队，所以真正要优化延迟，不能只换语言，还要监控 REST/WebSocket 延迟、减少轮询、优先 WebSocket、避免触发限速。([docs.polymarket.com][7])
+
+---
+
+# 十六、最终版本路线
+
+## v0.1：AI 投研 + Paper Trade
+
+```text
+Next.js Dashboard
+Python Strategy API
+PostgreSQL
+Redis Streams
+Hermes
+只读数据
+AI 信号
+模拟盘
+```
+
+## v0.2：Rust 实时行情
+
+```text
+Rust Market Engine
+Polymarket WebSocket
+实时 orderbook
+实时 spread / midpoint / imbalance
+```
+
+## v0.3：Review Loop
+
+```text
+AI 每晚复盘
+生成参数建议
+人工审批
+灰度测试
+禁止自动改 .env
+```
+
+## v1.0：人工确认交易
+
+```text
+AI 生成信号
+风控通过
+用户点击确认
+系统提交限价单
+交易记录自动入库
+```
+
+## v1.5：Rust Execution Engine
+
+```text
+订单签名
+下单
+撤单
+订单状态监听
+持仓监控
+熔断保护
+```
+
+这个阶段必须在模拟盘数据足够稳定后再做。
+
+---
+
+# 最终结论
+
+这个项目最终定位应该是：
+
+```text
+Hermes Polymarket Agent Cockpit
+一个预测市场 AI 投研、模拟盘、风控、复盘和参数审批驾驶舱
+```
+
+最终技术组合：
+
+```text
+Frontend：Next.js / TypeScript / Tailwind
+AI Strategy API：Python / FastAPI
+Realtime Engine：Rust
+Queue / Cache：Redis Streams
+Database：PostgreSQL
+Agent：Hermes
+Notification：Telegram
+Deployment：Docker Compose
+Mode：Paper Trade First
+```
+
+最重要的原则：
+
+```text
+先模拟，后真钱。
+先复盘，后扩仓。
+先验证策略，后优化延迟。
+AI 可以建议，但不能自动改生产配置。
+AI 可以筛选，但不能直接控制私钥和真钱。
+```
+
+这就是最终可执行、可落地的技术方案。
+
+[1]: https://docs.polymarket.com/api-reference/introduction?utm_source=chatgpt.com "Introduction - Polymarket Documentation"
+[2]: https://docs.polymarket.com/market-data/websocket/market-channel?utm_source=chatgpt.com "Market Channel"
+[3]: https://docs.polymarket.com/trading/overview?utm_source=chatgpt.com "Overview - Polymarket Documentation"
+[4]: https://nextjs.org/docs/app/getting-started/fetching-data?utm_source=chatgpt.com "Getting Started: Fetching Data"
+[5]: https://github.com/nousresearch/hermes-agent?utm_source=chatgpt.com "NousResearch/hermes-agent: The agent that grows with you"
+[6]: https://redis.io/docs/latest/develop/data-types/streams/?utm_source=chatgpt.com "Redis Streams | Docs"
+[7]: https://docs.polymarket.com/api-reference/rate-limits?utm_source=chatgpt.com "Rate Limits"

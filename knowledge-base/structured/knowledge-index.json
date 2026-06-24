@@ -1,0 +1,292 @@
+{
+  "version": "2.0",
+  "updated_at": "2026-06-24",
+  "entries": [
+    {
+      "id": "decision-001",
+      "type": "decision",
+      "file": "decisions/001-workspace-persistence.md",
+      "title": "代码任务使用持久化工作空间",
+      "tags": [
+        "workspace",
+        "persistence",
+        "code-review",
+        "security"
+      ],
+      "status": "active",
+      "created_at": "2026-05-14",
+      "confidence": 0.95,
+      "relevance": {
+        "project_types": [
+          "web_app",
+          "backend_api",
+          "any_coding_project"
+        ],
+        "roles": [
+          "orchestrator",
+          "code-reviewer",
+          "security-auditor"
+        ],
+        "phase": "setup"
+      },
+      "summary": "代码实现任务必须使用持久化工作空间(dir:)而非scratch，确保审查和审计能访问实际代码",
+      "content_summary": "代码实现任务必须使用持久化工作空间(dir:)而非临时scratch空间。原因: 审查和安全审计需要访问实际代码文件，scratch空间在任务完成后被GC清理导致无法审查。实施方案: orchestrator在创建代码类任务时指定workspace类型为dir:或使用共享Git仓库路径。后果: 增加磁盘空间占用，需要定期归档旧项目。",
+      "synonyms": [
+        "persistent workspace",
+        "scratch",
+        "gc",
+        "code review access",
+        "workspace type",
+        "dir type",
+        "工作空间",
+        "持久化",
+        "GC清理",
+        "代码审查"
+      ]
+    },
+    {
+      "id": "decision-002",
+      "type": "decision",
+      "file": "decisions/002-pm-api-review.md",
+      "title": "实现前增加 PM 对 API 定义的确认环节",
+      "tags": [
+        "api",
+        "pm-review",
+        "requirement",
+        "quality"
+      ],
+      "status": "active",
+      "created_at": "2026-05-14",
+      "confidence": 0.98,
+      "relevance": {
+        "project_types": [
+          "web_app",
+          "backend_api"
+        ],
+        "roles": [
+          "product-manager",
+          "backend-engineer",
+          "orchestrator"
+        ],
+        "phase": "design"
+      },
+      "summary": "API 设计完成后、实现前，PM 必须审查 API Schema 是否覆盖 PRD 所有用户故事字段",
+      "content_summary": "API设计完成后、实现前增加PM强制确认环节。背景: 短链接服务首次UAT失败，PRD中的custom_code和expires_at字段在API设计阶段丢失。方案: T3 API设计→T3.5 PM确认→T5 API实现，PM必须审查OpenAPI Spec是否覆盖所有用户故事字段。后果: 增加一个任务节点但消除需求遗漏。",
+      "synonyms": [
+        "api review",
+        "pm confirmation",
+        "requirement gap",
+        "field loss",
+        "user story",
+        "schema coverage",
+        "api spec",
+        "PM审查",
+        "字段丢失",
+        "需求遗漏",
+        "验收标准"
+      ]
+    },
+    {
+      "id": "decision-003",
+      "type": "decision",
+      "file": "decisions/003-rust-market-engine.md",
+      "title": "Rust 行情引擎项目骨架最佳实践",
+      "tags": [
+        "rust",
+        "websocket",
+        "redis",
+        "orderbook",
+        "polymarket"
+      ],
+      "status": "active",
+      "created_at": "2026-05-26",
+      "confidence": 0.85,
+      "relevance": {
+        "project_types": [
+          "rust",
+          "financial",
+          "websocket",
+          "realtime"
+        ],
+        "roles": [
+          "backend-engineer",
+          "tech-lead"
+        ],
+        "phase": "implementation"
+      },
+      "summary": "Rust 行情引擎: BigDecimal 价格精度, BTreeMap 订单簿, Redis 双层持久化, 指数退避重连",
+      "content_summary": "Rust行情引擎项目骨架最佳实践，包含6个关键决策: (1)价格用BigDecimal不用f64避免金融精度错误 (2)内存订单簿用BTreeMap+RwLock (3)Redis双层持久化(Stream历史+Hash快照) (4)WebSocket指数退避重连+随机抖动 (5)信号计算纯函数设计 (6)健康检查用裸TCP不用框架。附带3个踩坑记录: UTF-8截断panic、tracing宏导入、安全扫描环境限制。",
+      "synonyms": [
+        "rust",
+        "orderbook",
+        "polymarket",
+        "websocket",
+        "redis persistence",
+        "bigdecimal",
+        "btree map",
+        "signal calculation",
+        "health check",
+        "金融",
+        "行情",
+        "订单簿",
+        "WebSocket重连"
+      ]
+    },
+    {
+      "id": "decision-004",
+      "type": "decision",
+      "file": "decisions/004-market-engine-production-fixes.md",
+      "title": "Rust Market Engine Production Fixes",
+      "tags": [
+        "rust",
+        "websocket",
+        "parsing",
+        "redis",
+        "reconnection"
+      ],
+      "status": "active",
+      "created_at": "2026-05-26",
+      "confidence": 0.9,
+      "relevance": {
+        "project_types": [
+          "rust",
+          "websocket",
+          "financial"
+        ],
+        "roles": [
+          "backend-engineer",
+          "code-reviewer"
+        ],
+        "phase": "implementation"
+      },
+      "related_to": [
+        "decision-003"
+      ],
+      "summary": "WS 消息解析用 Envelope+Dispatch 模式, 重连延迟双向重置, Redis 显式连接克隆",
+      "content_summary": "Rust Market Engine生产修复，解决了5个问题: (1)WS消息解析用Envelope+Dispatch替代#[serde(tag)]模式 (2)重连延迟双向重置(成功和失败都重置) (3)Redis显式连接克隆模式 (4)交易事件专用Redis Stream (5)健康检查uptime追踪。核心改变是WS解析从tagged enum改为envelope dispatch模式，提高对未知事件类型的容错能力。",
+      "synonyms": [
+        "production fix",
+        "ws parsing",
+        "envelope dispatch",
+        "serde",
+        "reconnection",
+        "redis stream",
+        "trade events",
+        "uptime",
+        "消息解析",
+        "重连延迟",
+        "交易事件"
+      ]
+    },
+    {
+      "id": "decision-005",
+      "type": "decision",
+      "file": "decisions/005-squad-prd-patterns.md",
+      "title": "Squad PRD 需求模式 Phase 1",
+      "tags": [
+        "prd",
+        "cli",
+        "sqlite",
+        "local-first",
+        "security"
+      ],
+      "status": "active",
+      "created_at": "2026-05-28",
+      "confidence": 0.8,
+      "relevance": {
+        "project_types": [
+          "cli_tool",
+          "local_first",
+          "squad"
+        ],
+        "roles": [
+          "product-manager",
+          "backend-engineer",
+          "tech-lead"
+        ],
+        "phase": "requirements"
+      },
+      "summary": "Local-first+SQLite 是 CLI 工具核心差异化, sqlite-vec 提供向量搜索, 归档系统安全规则",
+      "content_summary": "Squad PRD需求模式Phase 1，为基于Hermes Kanban的CLI工具编写PRD的关键决策: (1)Local-first+SQLite是核心差异化 (2)sqlite-vec提供向量搜索无需外部服务 (3)归档系统安全规则(不导出敏感信息) (4)Profile包只含配置不含可执行代码 (5)KB上下文注入是RAG关键链路。附带可复用的验收标准模式: CLI命令用Given/When/Then格式覆盖正常+选项+错误。",
+      "synonyms": [
+        "cli tool",
+        "local-first",
+        "sqlite",
+        "sqlite-vec",
+        "archive security",
+        "profile pack",
+        "rag",
+        "kb injection",
+        "验收标准",
+        "CLI工具",
+        "归档安全"
+      ]
+    },
+    {
+      "id": "gotcha-deploy-version-sync",
+      "type": "gotcha",
+      "file": "gotchas/deployment-version-sync.md",
+      "title": "部署版本与代码版本同步",
+      "tags": [
+        "deployment",
+        "version",
+        "uat",
+        "dependency-chain"
+      ],
+      "status": "active",
+      "severity": "high",
+      "created_at": "2026-06-24",
+      "confidence": 0.95,
+      "prevented_count": 0,
+      "prevented_in": [],
+      "relevance": {
+        "project_types": [
+          "any_coding_project"
+        ],
+        "roles": [
+          "orchestrator",
+          "devops-engineer",
+          "product-manager"
+        ],
+        "phase": "deployment"
+      },
+      "summary": "UAT 任务必须依赖部署任务而非代码修复任务，否则验收的是旧版本",
+      "content_summary": "UAT验收任务错误地依赖代码修复任务而非部署任务，导致PM测试的是旧版本。根因: (1)代码修复不自动触发重新部署 (2)UAT依赖链配置错误。解决方案: 修复→部署→验收严格串行，UAT必须依赖部署任务。预防措施: orchestrator创建修复流程时确保依赖链正确，部署任务必须明确版本号。",
+      "synonyms": [
+        "deployment version",
+        "uat failure",
+        "old version",
+        "rollback",
+        "dependency chain",
+        "version mismatch",
+        "re-deploy",
+        "部署版本",
+        "旧版本",
+        "验收失败",
+        "依赖链",
+        "回滚"
+      ]
+    }
+  ],
+  "stats": {
+    "total_entries": 6,
+    "by_type": {
+      "decision": 5,
+      "pattern": 0,
+      "gotcha": 1,
+      "retrospective": 0
+    },
+    "by_status": {
+      "active": 6,
+      "deprecated": 0,
+      "superseded": 0
+    },
+    "by_confidence_range": {
+      "high": 4,
+      "medium": 2,
+      "low": 0
+    },
+    "has_content_summary": 6,
+    "total_synonyms": 68
+  }
+}

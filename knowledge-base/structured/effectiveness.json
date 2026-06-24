@@ -1,0 +1,89 @@
+{
+  "version": "1.0",
+  "updated_at": "2026-06-24",
+  "entries": {
+    "decision-001": {
+      "id": "decision-001",
+      "created_at": "2026-05-14",
+      "status": "active",
+      "read_count": 0,
+      "applied_in_projects": [],
+      "prevented_count": 0,
+      "prevented_in": [],
+      "last_used_at": null,
+      "confidence": 0.95,
+      "trend": "new"
+    },
+    "decision-002": {
+      "id": "decision-002",
+      "created_at": "2026-05-14",
+      "status": "active",
+      "read_count": 0,
+      "applied_in_projects": [],
+      "prevented_count": 0,
+      "prevented_in": [],
+      "last_used_at": null,
+      "confidence": 0.98,
+      "trend": "new"
+    },
+    "decision-003": {
+      "id": "decision-003",
+      "created_at": "2026-05-26",
+      "status": "active",
+      "read_count": 0,
+      "applied_in_projects": [],
+      "prevented_count": 0,
+      "prevented_in": [],
+      "last_used_at": null,
+      "confidence": 0.85,
+      "trend": "new"
+    },
+    "decision-004": {
+      "id": "decision-004",
+      "created_at": "2026-05-26",
+      "status": "active",
+      "read_count": 0,
+      "applied_in_projects": [],
+      "prevented_count": 0,
+      "prevented_in": [],
+      "last_used_at": null,
+      "confidence": 0.9,
+      "trend": "new"
+    },
+    "decision-005": {
+      "id": "decision-005",
+      "created_at": "2026-05-28",
+      "status": "active",
+      "read_count": 0,
+      "applied_in_projects": [],
+      "prevented_count": 0,
+      "prevented_in": [],
+      "last_used_at": null,
+      "confidence": 0.8,
+      "trend": "new"
+    },
+    "gotcha-deploy-version-sync": {
+      "id": "gotcha-deploy-version-sync",
+      "created_at": "2026-06-24",
+      "status": "active",
+      "read_count": 0,
+      "applied_in_projects": [],
+      "prevented_count": 0,
+      "prevented_in": [],
+      "last_used_at": null,
+      "confidence": 0.95,
+      "trend": "new"
+    }
+  },
+  "decay_rules": {
+    "stale_threshold_days": 90,
+    "no_read_stale_days": 60,
+    "confidence_decay_rate": 0.05,
+    "auto_archive_days": 180,
+    "status_transitions": {
+      "active -> declining": "连续30天未被引用",
+      "declining -> stale": "连续60天未被引用",
+      "stale -> archived": "连续180天未被引用"
+    }
+  }
+}
