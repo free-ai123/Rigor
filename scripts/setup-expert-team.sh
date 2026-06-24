@@ -1,167 +1,228 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # ============================================================
-# Hermes Expert Team (Rigor) — 一键部署脚本 (v3.0)
-# 兼容 macOS 和 Linux
+# Rigor Installer v4.0 (Professional Edition)
+# Usage:
+#   ./scripts/setup-expert-team.sh             # 安装/更新
+#   ./scripts/setup-expert-team.sh --uninstall # 卸载
+#   ./scripts/setup-expert-team.sh --status    # 状态检查
 # ============================================================
 set -euo pipefail
+
+# --- 颜色定义 ---
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# --- 路径解析 (支持在任何目录下运行) ---
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do
+  DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+REPO_ROOT="$( cd -P "$( dirname "$SOURCE" )/.." && pwd )"
 
 HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
 PROFILES_DIR="$HERMES_HOME/profiles"
 CONFIG_FILE="$HERMES_HOME/config.yaml"
 
-# 颜色定义
-GREEN='\033[0;32m'
-RED='\033[0;31m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
-
-echo -e "============================================================"
-echo -e "  \033[1;34mHermes Expert Team (Rigor)\033[0m 部署 (v3.0)"
-echo -e "============================================================"
-echo ""
-echo "HERMES_HOME: $HERMES_HOME"
-echo "Platform: $(uname -s)"
-echo ""
-
-# ----------------------------------------------------------
-# 步骤 1: 安装 Profile
-# ----------------------------------------------------------
-echo -e "[1/4] 安装专家角色 Profile..."
-
+# 核心角色列表
 PROFILES=(
     "orchestrator" "product-manager" "tech-lead" "backend-engineer"
     "frontend-engineer" "data-scientist" "data-engineer" "code-reviewer"
     "security-auditor" "qa-engineer" "devops-engineer" "technical-writer"
 )
 
-for profile in "${PROFILES[@]}"; do
-    profile_dir="$PROFILES_DIR/$profile"
-    mkdir -p "$profile_dir/skills" "$profile_dir/memories"
-    
-    # 复制 SOUL.md 和 config.yaml (使用脚本所在目录相对路径)
-    # 注意：setup-expert-team.sh 应该在 profiles/ 同级目录运行，或者在仓库根目录运行
-    # 我们假设用户在仓库根目录运行，所以路径是 profiles/$profile/
-    SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-    
-    if [ -f "$SCRIPT_DIR/profiles/$profile/SOUL.md" ]; then
-        cp "$SCRIPT_DIR/profiles/$profile/SOUL.md" "$profile_dir/SOUL.md"
-        echo -e "  ✅ ${GREEN}$profile${NC}: SOUL.md 更新"
-    elif [ -d "$profile_dir" ]; then
-        echo -e "  ⚠️  ${YELLOW}$profile${NC}: SOUL.md 未找到 (跳过)"
-    else
-        echo -e "  ❌ ${RED}$profile${NC}: 缺少 SOUL.md"
-    fi
-    
-    if [ -f "$SCRIPT_DIR/profiles/$profile/config.yaml" ]; then
-        cp "$SCRIPT_DIR/profiles/$profile/config.yaml" "$profile_dir/config.yaml"
-    fi
-done
-echo ""
+# --- 日志函数 ---
+log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
+log_success() { echo -e "${GREEN}[OK]${NC} $1"; }
+log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
+log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
-# ----------------------------------------------------------
-# 步骤 2: 配置 Kanban
-# ----------------------------------------------------------
-echo -e "[2/4] 配置 Kanban..."
+# --- 检查前提条件 ---
+check_prerequisites() {
+    if ! command -v hermes &> /dev/null; then
+        log_error "Hermes 未安装或未添加到 PATH。请先安装 Hermes Agent。"
+        exit 1
+    fi
 
-kanban_set() {
-    local key=$1
-    local value=$2
-    # 使用 sed 更新配置文件，如果 key 不存在则追加
-    if grep -q "$key:" "$CONFIG_FILE" 2>/dev/null; then
-        # macOS sed 需要 '' 参数
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-            sed -i '' "s|^  $key:.*|  $key: $value|" "$CONFIG_FILE"
-        else
-            sed -i "s|^  $key:.*|  $key: $value|" "$CONFIG_FILE"
+    local hermes_version
+    hermes_version=$(hermes --version 2>/dev/null || echo "Unknown")
+    log_info "检测到 Hermes 版本: $hermes_version"
+
+    # macOS 内存检查 (建议至少 8GB)
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        local mem_mb
+        mem_mb=$(sysctl -n hw.memsize 2>/dev/null | awk '{print $1/1024/1024}')
+        if (( $(echo "$mem_mb < 8000" | bc -l) )); then
+            log_warn "系统内存 < 8GB。运行完整 12 角色团队可能会卡顿，建议使用部分角色模式。"
         fi
-    else
-        echo "  kanban:" >> "$CONFIG_FILE"
-        echo "    $key: $value" >> "$CONFIG_FILE"
     fi
-    echo -e "  ${GREEN}✓${NC} Set $key = $value"
 }
 
-kanban_set "kanban.orchestrator_profile" "orchestrator"
-kanban_set "kanban.auto_decompose" "true"
-kanban_set "kanban.auto_decompose_per_tick" "3"
-kanban_set "kanban.dispatch_in_gateway" "true"
-kanban_set "kanban.dispatch_interval_seconds" "60"
-kanban_set "kanban.failure_limit" "2"
-kanban_set "kanban.dispatch_stale_timeout_seconds" "14400"
-echo ""
+# --- 安装逻辑 ---
+do_install() {
+    check_prerequisites
 
-# ----------------------------------------------------------
-# 步骤 3: 启动 Gateway
-# ----------------------------------------------------------
-echo -e "[3/4] 检查/启动 Gateway..."
+    log_info "开始安装 Rigor Expert Team..."
+    
+    # 1. 安装 Profile
+    log_info "[1/3] 正在部署专家角色..."
+    for profile in "${PROFILES[@]}"; do
+        profile_dir="$PROFILES_DIR/$profile"
+        mkdir -p "$profile_dir/skills" "$profile_dir/memories"
+        
+        if [ -f "$REPO_ROOT/profiles/$profile/SOUL.md" ]; then
+            cp "$REPO_ROOT/profiles/$profile/SOUL.md" "$profile_dir/SOUL.md"
+            log_success "$profile: SOUL.md 已更新"
+        else
+            log_error "$profile: 找不到源文件 (路径: $REPO_ROOT/profiles/$profile/)"
+            exit 1
+        fi
+        
+        if [ -f "$REPO_ROOT/profiles/$profile/config.yaml" ]; then
+            cp "$REPO_ROOT/profiles/$profile/config.yaml" "$profile_dir/config.yaml"
+        fi
+    done
 
-# macOS 使用 launchctl, Linux 使用 systemd 或后台进程
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    echo "  (macOS 检测到，使用 launchctl 管理)"
-    # 检查 launchd 服务状态
-    if launchctl list | grep -q "ai.hermes.gateway"; then
-        echo -e "  ${GREEN}✅${NC} Hermes Gateway 已加载 (Launchd)"
+    # 2. 配置 Kanban (带备份)
+    log_info "[2/3] 正在配置 Kanban..."
+    if [ -f "$CONFIG_FILE" ]; then
+        cp "$CONFIG_FILE" "${CONFIG_FILE}.bak.rigor"
+        log_info "已备份 config.yaml -> config.yaml.bak.rigor"
+    fi
+
+    hermes config set kanban.orchestrator_profile orchestrator
+    hermes config set kanban.auto_decompose true
+    hermes config set kanban.auto_decompose_per_tick 3
+    hermes config set kanban.dispatch_in_gateway true
+    hermes config set kanban.dispatch_interval_seconds 60
+    log_success "Kanban 配置已写入"
+
+    # 3. 验证
+    log_info "[3/3] 正在验证安装..."
+    local errors=0
+    
+    # 验证 Profile
+    for profile in "${PROFILES[@]}"; do
+        if [ ! -f "$PROFILES_DIR/$profile/SOUL.md" ]; then
+            log_error "验证失败：$profile/SOUL.md 不存在"
+            errors=$((errors + 1))
+        fi
+    done
+
+    # 验证配置
+    if grep -q "auto_decompose: true" "$CONFIG_FILE" 2>/dev/null; then
+        log_success "配置验证通过：auto_decompose 已开启"
     else
-        echo -e "  ${YELLOW}⚠️${NC} Hermes Gateway 未加载。请运行: ${CYAN}hermes gateway start${NC}"
+        log_warn "配置验证警告：auto_decompose 可能未正确写入，请检查 config.yaml"
     fi
-else
-    # Linux 检查
-    if hermes gateway status 2>/dev/null | grep -q "running"; then
-        echo -e "  ${GREEN}✅${NC} Hermes Gateway 运行中"
+
+    if [ $errors -eq 0 ]; then
+        echo ""
+        echo -e "${GREEN}============================================================${NC}"
+        echo -e "${GREEN}  🎉 Rigor 安装成功！${NC}"
+        echo -e "${GREEN}============================================================${NC}"
+        echo ""
+        echo "  💡 使用提示:"
+        echo "    - 启动任务：hermes kanban create 'Build a URL shortener' --status triage"
+        echo "    - 查看进度：hermes kanban list"
+        echo "    - 卸载软件：bash scripts/setup-expert-team.sh --uninstall"
+        echo ""
     else
-        echo -e "  ${YELLOW}⚠️${NC} Hermes Gateway 未运行。尝试启动..."
-        hermes gateway start 2>/dev/null || echo -e "  ${RED}❌ 启动失败，请手动运行 hermes gateway start${NC}"
+        log_error "安装完成但有 $errors 个错误，请检查上述日志。"
+        exit 1
     fi
-fi
-echo ""
+}
 
-# ----------------------------------------------------------
-# 步骤 4: 部署验证 (更稳健的方式)
-# ----------------------------------------------------------
-echo -e "[4/4] 部署验证..."
-
-ERRORS=0
-
-# 1. 验证 Profile 目录
-for profile in "${PROFILES[@]}"; do
-    if [ ! -f "$PROFILES_DIR/$profile/SOUL.md" ]; then
-        echo -e "  ${RED}❌${NC} 缺失: $profile/SOUL.md"
-        ERRORS=$((ERRORS + 1))
+# --- 卸载逻辑 ---
+do_uninstall() {
+    log_warn "即将卸载 Rigor Expert Team。"
+    echo -e "${YELLOW}此操作将删除以下 Profile 并还原 Kanban 配置:${NC}"
+    for profile in "${PROFILES[@]}"; do
+        echo "  - $PROFILES_DIR/$profile"
+    done
+    
+    read -p "是否继续？(输入 YES 确认): " confirm
+    if [ "$confirm" != "YES" ]; then
+        log_info "操作已取消。"
+        exit 0
     fi
-done
-if [ $ERRORS -eq 0 ]; then
-    echo -e "  ${GREEN}✅${NC} 12 个 Profile 已正确安装"
-fi
 
-# 2. 验证 Kanban 配置 (直接读取文件，不依赖 CLI)
-echo ""
-if grep -q "auto_decompose: true" "$CONFIG_FILE"; then
-    echo -e "  ${GREEN}✅${NC} kanban.auto_decompose = true"
-else
-    echo -e "  ${RED}❌${NC} kanban.auto_decompose 未配置为 true (请检查 $CONFIG_FILE)"
-    ERRORS=$((ERRORS + 1))
-fi
+    log_info "开始卸载..."
 
-if grep -q "orchestrator_profile: orchestrator" "$CONFIG_FILE"; then
-    echo -e "  ${GREEN}✅${NC} kanban.orchestrator_profile = orchestrator"
-else
-    echo -e "  ${RED}❌${NC} kanban.orchestrator_profile 未配置 (请检查 $CONFIG_FILE)"
-    ERRORS=$((ERRORS + 1))
-fi
+    # 1. 删除 Profile
+    for profile in "${PROFILES[@]}"; do
+        profile_dir="$PROFILES_DIR/$profile"
+        if [ -d "$profile_dir" ]; then
+            rm -rf "$profile_dir"
+            log_success "$profile 已删除"
+        else
+            log_warn "$profile 不存在，跳过"
+        fi
+    done
 
-echo ""
-if [ $ERRORS -eq 0 ]; then
-    echo -e "============================================================"
-    echo -e "  ${GREEN}🎉 部署成功！一切正常。${NC}"
-    echo -e "============================================================"
+    # 2. 还原配置 (如果存在备份)
+    if [ -f "${CONFIG_FILE}.bak.rigor" ]; then
+        cp "${CONFIG_FILE}.bak.rigor" "$CONFIG_FILE"
+        rm -f "${CONFIG_FILE}.bak.rigor"
+        log_success "配置已还原为安装前的状态"
+    else
+        log_warn "未找到配置备份，请手动删除 config.yaml 中的 kanban 部分"
+        # 尝试自动清理 kanban 键值
+        if command -v sed &> /dev/null; then
+             if [[ "$OSTYPE" == "darwin"* ]]; then
+                sed -i '' '/^kanban:/,/^[^ ]/d' "$CONFIG_FILE" 2>/dev/null || true
+             else
+                sed -i '/^kanban:/,/^[^ ]/d' "$CONFIG_FILE" 2>/dev/null || true
+             fi
+             log_info "已尝试自动清理 kanban 配置块"
+        fi
+    fi
+
     echo ""
-    echo "接下来你可以："
-    echo "  1. hermes kanban create 'Build a URL shortener' --status triage"
-    echo "  2. hermes kanban list"
-else
-    echo -e "============================================================"
-    echo -e "  ${RED}⚠️  部署有 $ERRORS 个问题。${NC}"
-    echo -e "============================================================"
+    echo -e "${YELLOW}============================================================${NC}"
+    echo -e "${YELLOW}  🗑️ Rigor 已卸载${NC}"
+    echo -e "${YELLOW}============================================================${NC}"
     echo ""
-    echo "请检查上面的错误提示，或查看日志: ~/.hermes/logs/"
-fi
+    log_info "注意：Gateway 服务未停止，如需清理请手动运行 'hermes gateway stop'"
+}
+
+# --- 状态检查 ---
+do_status() {
+    log_info "Rigor 系统状态检查..."
+    
+    local installed=0
+    local missing=0
+    
+    for profile in "${PROFILES[@]}"; do
+        if [ -f "$PROFILES_DIR/$profile/SOUL.md" ]; then
+            installed=$((installed + 1))
+        else
+            missing=$((missing + 1))
+        fi
+    done
+
+    echo "  Profile 状态: $installed 已安装 / $missing 缺失"
+    
+    if grep -q "auto_decompose: true" "$CONFIG_FILE" 2>/dev/null; then
+        echo "  Kanban 状态: ✅ 已启用"
+    else
+        echo "  Kanban 状态: ❌ 未启用"
+    fi
+}
+
+# --- 入口 ---
+case "${1:-}" in
+    --uninstall)
+        do_uninstall
+        ;;
+    --status)
+        do_status
+        ;;
+    *)
+        do_install
+        ;;
+esac
