@@ -51,7 +51,7 @@ examples/url-shortener/
 bash scripts/setup-expert-team.sh
 
 # Create the same task
-hermes kanban create "Build a URL shortener with custom codes, click tracking, and link expiration" --status triage
+hermes kanban create "Build a URL shortener with custom codes, click tracking, and link expiration" --triage
 
 # Watch it work
 hermes kanban list

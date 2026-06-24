@@ -127,7 +127,7 @@ do_install() {
         echo -e "${GREEN}============================================================${NC}"
         echo ""
         echo "  💡 使用提示:"
-        echo "    - 启动任务：hermes kanban create 'Build a URL shortener' --status triage"
+        echo "    - 启动任务：hermes kanban create 'Build a URL shortener' --triage"
         echo "    - 查看进度：hermes kanban list"
         echo "    - 卸载软件：bash scripts/setup-expert-team.sh --uninstall"
         echo ""

@@ -84,7 +84,7 @@ cd Rigor
 bash scripts/setup-expert-team.sh
 
 # 3. 最初のタスクを作成
-hermes kanban create "カスタムコードとクリックトラッキング付きURL短縮サービス" --status triage
+hermes kanban create "カスタムコードとクリックトラッキング付きURL短縮サービス" --triage
 ```
 
 60秒後、Orchestrator がタスクを自動分解、12のロールが連携を開始します。

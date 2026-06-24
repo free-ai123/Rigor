@@ -84,7 +84,7 @@ cd Rigor
 bash scripts/setup-expert-team.sh
 
 # 3. 创建第一个任务
-hermes kanban create "做一个短链接服务，支持自定义后缀和点击统计" --status triage
+hermes kanban create "做一个短链接服务，支持自定义后缀和点击统计" --triage
 ```
 
 60 秒后，Orchestrator 自动拆解任务，12 个角色开始协作。

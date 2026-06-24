@@ -25,7 +25,7 @@ The script will:
 ### Step 2: Create Your First Task
 
 ```bash
-hermes kanban create "Build a URL shortener with custom codes and click tracking" --status triage
+hermes kanban create "Build a URL shortener with custom codes and click tracking" --triage
 ```
 
 Wait 60 seconds. The Orchestrator will automatically:

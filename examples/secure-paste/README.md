@@ -104,7 +104,7 @@ cd Rigor
 bash scripts/setup-expert-team.sh
 
 # 3. Create the same task
-hermes kanban create "Build SecurePaste: an encrypted, ephemeral code sharing service with burn-after-read, password protection, and auto-expiration" --status triage
+hermes kanban create "Build SecurePaste: an encrypted, ephemeral code sharing service with burn-after-read, password protection, and auto-expiration" --triage
 
 # 4. Watch 12 AI experts collaborate
 hermes kanban list

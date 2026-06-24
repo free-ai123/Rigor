@@ -84,7 +84,7 @@ cd Rigor
 bash scripts/setup-expert-team.sh
 
 # 3. Create your first task
-hermes kanban create "Build a URL shortener with custom codes and click tracking" --status triage
+hermes kanban create "Build a URL shortener with custom codes and click tracking" --triage
 ```
 
 60 seconds later, Orchestrator decomposes the task, 12 roles start collaborating.
