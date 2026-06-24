@@ -27,6 +27,8 @@ Built on [Hermes Agent](https://github.com/NousResearch/hermes-agent) — pure S
 | **Structured Knowledge Base** | **76%** | 65% | 20% | 35% |
 | **Observability** | **68%** | 52% | 15% | 22% |
 
+*Data source: Multi-Agent System Capability Analysis, June 2026*
+
 ## 12 Roles
 
 | Role | Responsibility | Key Output |
@@ -75,8 +77,8 @@ Deploy → UAT → Retrospective → Knowledge Capture
 
 ```bash
 # 1. Clone
-git clone https://github.com/rigor-dev/rigor.git
-cd rigor
+git clone https://github.com/free-ai123/Rigor.git
+cd Rigor
 
 # 2. Deploy
 bash scripts/setup-expert-team.sh
@@ -94,31 +96,18 @@ hermes kanban create "Build a URL shortener with custom codes and click tracking
 hermes kanban list
 
 # Project dashboard (auto-updated)
-cat ~/.hermes/kanban/workspace/shared/structured/project-dashboard.json
+cat ~/.hermes/kanban/workspace/shared/structured/project-dashboard.json | python3 -m json.tool
 
 # Task dependency tree
 hermes kanban show <task-id> --tree
 ```
 
-## Knowledge Base
-
-Rigor includes a structured knowledge base (`knowledge-base/structured/`) for cross-project experience reuse:
-
-- **knowledge-index.json** — Knowledge index with tags, synonyms, confidence, relevance
-- **effectiveness.json** — Effectiveness tracking (prevention count, trends, decay rules)
-- **project-profiles.json** — Project profile rules (auto-inject relevant knowledge by type)
-- **edges.json** — Knowledge relationship graph (decisions → bugs → fixes → patterns)
-
-New projects auto-inject relevant knowledge based on project type and tech stack, avoiding repeated mistakes.
-
-## Project Structure
+## Repository Structure
 
 ```
-rigor/
-├── profiles/                     # 12 expert roles
+Rigor/                          # 32 files, ~30KB
+├── profiles/                   # 12 expert roles (SOUL.md + config.yaml each)
 │   ├── orchestrator/
-│   │   ├── SOUL.md               # Role definition + workflow + collaboration rules
-│   │   └── config.yaml           # Model config + agent parameters
 │   ├── product-manager/
 │   ├── tech-lead/
 │   ├── backend-engineer/
@@ -131,18 +120,20 @@ rigor/
 │   ├── devops-engineer/
 │   └── technical-writer/
 ├── scripts/
-│   └── setup-expert-team.sh      # One-click deployment script
+│   └── setup-expert-team.sh    # One-click deployment (v2.0)
 ├── knowledge-base/
-│   └── structured/               # Structured knowledge base
-│       ├── knowledge-index.json
-│       ├── effectiveness.json
-│       ├── project-profiles.json
-│       └── edges.json
-├── docs/                         # Documentation
-│   ├── architecture.md
-│   ├── quickstart.md
-│   └── troubleshooting.md
-└── LICENSE
+│   └── structured/             # Structured knowledge base
+│       ├── knowledge-index.json  # 6 entries, 68 synonyms
+│       ├── effectiveness.json    # Effectiveness tracking + decay rules
+│       ├── project-profiles.json # Auto-inject rules
+│       └── edges.json            # Knowledge relationship graph
+├── docs/
+│   └── quickstart.md           # 5-minute guide
+├── README.md                   # English
+├── README.zh.md                # 中文
+├── README.ja.md                # 日本語
+├── LICENSE                     # MIT
+└── .gitignore
 ```
 
 ## Comparison
@@ -158,6 +149,15 @@ Rigor is **12 roles collaborating by standard software engineering processes**, 
 Cursor is an excellent AI coding assistant that helps **you** write code. But it doesn't collaborate autonomously — you decide architecture, write tests, and review yourself.
 
 Rigor is an **autonomous AI team** — you provide the requirement, the rest is handled.
+
+## Knowledge Base
+
+Rigor includes a structured knowledge base for cross-project experience reuse:
+
+- **knowledge-index.json** — 6 knowledge entries with tags, 68 synonyms, confidence scores, and relevance rules
+- **effectiveness.json** — Tracks how many times each knowledge item prevented a real issue, with automatic decay rules (30d unused → declining, 60d → stale, 180d → archived)
+- **project-profiles.json** — Auto-injects relevant knowledge based on project type and active roles
+- **edges.json** — Relationship graph connecting decisions → bugs → fixes → patterns
 
 ## Roadmap
 
@@ -175,7 +175,7 @@ Rigor is an **autonomous AI team** — you provide the requirement, the rest is 
 - [ ] More vertical domain roles (finance, healthcare, legal)
 - [ ] Custom role creation guide
 - [ ] Web Dashboard integration
-- [ ] Multi-language support
+- [ ] Multi-language SOUL.md support
 
 ## Contributing
 
@@ -186,12 +186,10 @@ Contributions welcome!
 - **Add knowledge**: Update `knowledge-base/` → PR
 - **Report bugs**: Issues or PRs welcome
 
-See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for details.
-
 ## License
 
 MIT — see [LICENSE](LICENSE)
 
 ---
 
-⭐ If this project is useful to you, a star is greatly appreciated!
+⭐ If Rigor is useful to you, a star is greatly appreciated!

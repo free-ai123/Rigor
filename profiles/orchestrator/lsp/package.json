@@ -1,7 +1,0 @@
-{
-  "dependencies": {
-    "pyright": "^1.1.410",
-    "typescript": "^6.0.3",
-    "typescript-language-server": "^5.2.0"
-  }
-}

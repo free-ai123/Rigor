@@ -1,9 +1,0 @@
-{
-  "last_report_path": "/root/.hermes/profiles/orchestrator/logs/curator/20260617-135051",
-  "last_run_at": "2026-06-17T13:50:51.794421+00:00",
-  "last_run_duration_seconds": 809.16142,
-  "last_run_summary": "auto: no changes; llm: Now let me produce the final summary. Based on all the successful consolidations performed:\n\n## Human Summary\n\n**Consolidation pass complete.** Processed 12 umbrella clusters across the skill library.\n\n### Clusters Processed\n\n| # | Cluster …\narchived 36 skill(s):\n  • airtable — pruned (stale)\n  • ascii-art — pruned (stale)\n  • ascii-video — pruned (stale)\n  • baoyu-article-illustrator — pruned (stale)\n  • baoyu-comic — pruned (stale)\n  • baoyu-infographic — pruned (stale)\n  • design-md — pruned (stale)\n  • dspy — pruned (stale)\n  • excalidraw — pruned (stale)\n  • gif-search — pruned (stale)\n  … and 26 more\nfull report: hermes curator status",
-  "last_run_summary_shown_at": null,
-  "paused": false,
-  "run_count": 5
-}
