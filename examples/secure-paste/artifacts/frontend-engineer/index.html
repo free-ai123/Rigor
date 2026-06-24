@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecurePaste - Encrypted Ephemeral Sharing</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/atom-one-dark.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #0f111a;
+            --card-bg: #161b22;
+            --border: #30363d;
+            --text-main: #c9d1d9;
+            --text-muted: #8b949e;
+            --accent: #58a6ff;
+            --danger: #f85149;
+            --success: #2ea043;
+            --input-bg: #0d1117;
+        }
+        body { background: var(--bg-color); color: var(--text-main); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 2rem; display: flex; justify-content: center; min-height: 100vh; }
+        .container { width: 100%; max-width: 800px; }
+        h1 { font-size: 2rem; margin-bottom: 0.5rem; }
+        h1 span { color: var(--accent); }
+        .subtitle { color: var(--text-muted); margin-bottom: 2rem; }
+        
+        /* Form Card */
+        .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 6px; padding: 1.5rem; margin-bottom: 1.5rem; }
+        textarea { width: 100%; background: var(--input-bg); border: 1px solid var(--border); color: var(--text-main); border-radius: 6px; padding: 1rem; font-family: 'Fira Code', monospace; font-size: 0.9rem; resize: vertical; min-height: 200px; box-sizing: border-box; outline: none; }
+        textarea:focus { border-color: var(--accent); }
+        
+        .options { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-top: 1rem; }
+        .option-group label { display: block; color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.5rem; }
+        select, input[type="text"], input[type="password"] { width: 100%; background: var(--input-bg); border: 1px solid var(--border); color: var(--text-main); padding: 0.5rem; border-radius: 4px; box-sizing: border-box; }
+        
+        .checkbox-group { display: flex; align-items: center; gap: 0.5rem; margin-top: 2rem; }
+        input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); }
+        
+        .btn { background: var(--success); color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 6px; font-size: 1rem; cursor: pointer; width: 100%; margin-top: 1rem; font-weight: bold; transition: opacity 0.2s; }
+        .btn:hover { opacity: 0.9; }
+
+        /* Result Area */
+        .result { display: none; text-align: center; }
+        .link-box { background: var(--input-bg); border: 1px dashed var(--accent); padding: 1rem; margin: 1rem 0; word-break: break-all; font-family: monospace; color: var(--accent); }
+        .copy-btn { background: var(--accent); font-size: 0.85rem; padding: 0.4rem 0.8rem; }
+
+        /* View Mode */
+        .view-area { display: none; }
+        .code-block { background: #282c34; border-radius: 6px; overflow: hidden; }
+        pre { margin: 0; padding: 1rem; }
+        .meta-info { color: var(--text-muted); font-size: 0.8rem; margin-top: 0.5rem; display: flex; justify-content: space-between; }
+        .burned-msg { display: none; text-align: center; color: var(--danger); padding: 2rem; border: 1px solid var(--danger); border-radius: 6px; }
+        
+        /* Modal */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); justify-content: center; align-items: center; z-index: 100; }
+        .modal-content { background: var(--card-bg); padding: 2rem; border-radius: 8px; width: 300px; text-align: center; border: 1px solid var(--border); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        
+        <!-- Creation Mode -->
+        <div id="create-mode">
+            <h1>Secure<span>Paste</span></h1>
+            <p class="subtitle">Encrypted. Ephemeral. Secure.</p>
+            
+            <div class="card">
+                <textarea id="content" placeholder="Paste your code or text here..." spellcheck="false"></textarea>
+                <div class="options">
+                    <div class="option-group">
+                        <label>Expiration</label>
+                        <select id="expiration">
+                            <option value="3600">1 Hour</option>
+                            <option value="86400" selected>24 Hours</option>
+                            <option value="604800">7 Days</option>
+                        </select>
+                    </div>
+                    <div class="option-group">
+                        <label>Password (Optional)</label>
+                        <input type="password" id="password" placeholder="Set password...">
+                    </div>
+                </div>
+                
+                <div class="checkbox-group">
+                    <input type="checkbox" id="burn" checked>
+                    <label for="burn">🔥 Burn after reading (Delete immediately after first view)</label>
+                </div>
+
+                <button class="btn" onclick="createPaste()">🔒 Encrypt & Create Link</button>
+            </div>
+
+            <div id="result" class="card result">
+                <h3 style="color: var(--success)">🔗 Paste Created!</h3>
+                <p class="subtitle">This link will self-destruct.</p>
+                <div class="link-box" id="link-display"></div>
+                <button class="btn copy-btn" onclick="copyLink()">Copy Link</button>
+            </div>
+        </div>
+
+        <!-- View Mode -->
+        <div id="view-mode" class="view-area">
+            <h1>Viewing Paste</h1>
+            <div id="burned" class="burned-msg card">
+                <h2>🔥 POOF!</h2>
+                <p>This paste has been burned and is permanently deleted.</p>
+            </div>
+            <div id="content-display" class="card">
+                <div class="code-block">
+                    <pre><code id="code-content" class="language-python">Loading...</code></pre>
+                </div>
+                <div class="meta-info">
+                    <span id="expiration-info">⏱️ Expires in: 23 hours</span>
+                    <span id="burn-info">🔥 Burn after read enabled</span>
+                </div>
+                <button class="btn" onclick="copyContent()" style="margin-top: 1rem; background: var(--accent)">Copy Content</button>
+            </div>
+        </div>
+
+        <!-- Password Modal -->
+        <div id="pwd-modal" class="modal">
+            <div class="modal-content">
+                <h3>🔒 Protected Paste</h3>
+                <p style="font-size: 0.9rem; color: var(--text-muted)">Enter the password to view this content.</p>
+                <input type="password" id="pwd-input" placeholder="Password..." style="margin-bottom: 1rem;">
+                <button class="btn" onclick="submitPassword()">Unlock</button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // --- UI Logic ---
+        const API_BASE = '/api/v1/pastes'; // Simulated endpoint
+
+        async function createPaste() {
+            const content = document.getElementById('content').value;
+            if(!content) return alert("Content cannot be empty!");
+
+            const payload = {
+                content: content,
+                expiration_seconds: parseInt(document.getElementById('expiration').value),
+                password: document.getElementById('password').value || null,
+                burn_after_read: document.getElementById('burn').checked
+            };
+
+            // Mocking the API call for Demo purposes
+            console.log("POST /api/v1/pastes", payload);
+            
+            // Simulate server response
+            const mockId = '550e8400-e29b-41d4-a716-446655440000';
+            document.getElementById('link-display').textContent = `${window.location.origin}/p/${mockId}`;
+            document.getElementById('result').style.display = 'block';
+        }
+
+        function copyLink() {
+            navigator.clipboard.writeText(document.getElementById('link-display').textContent);
+        }
+
+        function copyContent() {
+            navigator.clipboard.writeText(document.getElementById('code-content').textContent);
+        }
+
+        // Simulation: If URL contains ?demo=1, show View Mode
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('demo') === '1') {
+            document.getElementById('create-mode').style.display = 'none';
+            document.getElementById('view-mode').style.display = 'block';
+            
+            // Check if password needed
+            const needsPwd = true; // Mock
+            if(needsPwd) {
+                document.getElementById('pwd-modal').style.display = 'flex';
+            } else {
+                showContent();
+            }
+        }
+
+        function submitPassword() {
+            const pwd = document.getElementById('pwd-input').value;
+            if(pwd === 'demo') { // Mock password check
+                document.getElementById('pwd-modal').style.display = 'none';
+                showContent();
+            } else {
+                alert("Incorrect password! (Hint: 'demo')");
+            }
+        }
+
+        function showContent() {
+            const code = `import requests
+
+def get_secret_data():
+    response = requests.get('https://securepaste.example.com/raw/550e8400')
+    return response.text
+
+# This code was securely pasted and will self-destruct after reading.`;
+            
+            const codeEl = document.getElementById('code-content');
+            codeEl.textContent = code;
+            hljs.highlightElement(codeEl);
+        }
+    </script>
+</body>
+</html>
