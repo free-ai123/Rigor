@@ -1,8 +1,10 @@
-# Example Project: SecurePaste
+# Example Project: SecurePaste (Secure Code Sharing)
 
 A secure, ephemeral code/text sharing service. **This is a real project output from Rigor.**
 
 > 🔒 Content encrypted at rest · 🔥 Burn-after-read · 🔑 Password protection · ⏱️ Auto-expiration
+
+**中文文档**: [查看中文 README](README.zh.md)
 
 ## What's Here
 
