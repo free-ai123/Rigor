@@ -1,183 +1,167 @@
 #!/bin/bash
 # ============================================================
-# Hermes 多角色专家团 — 一键部署脚本
-# 用法: bash setup-expert-team.sh
-# 版本: 2.0 (12 roles, with verification)
+# Hermes Expert Team (Rigor) — 一键部署脚本 (v3.0)
+# 兼容 macOS 和 Linux
 # ============================================================
-set -e
+set -euo pipefail
 
 HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
 PROFILES_DIR="$HERMES_HOME/profiles"
+CONFIG_FILE="$HERMES_HOME/config.yaml"
 
-echo "============================================================"
-echo "  Hermes 多角色专家团 部署 (v2.0)"
-echo "============================================================"
+# 颜色定义
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+echo -e "============================================================"
+echo -e "  \033[1;34mHermes Expert Team (Rigor)\033[0m 部署 (v3.0)"
+echo -e "============================================================"
 echo ""
 echo "HERMES_HOME: $HERMES_HOME"
-echo "Profiles 目录: $PROFILES_DIR"
+echo "Platform: $(uname -s)"
 echo ""
 
-# ---- 步骤 1: 安装 Profile 角色 ----
-echo "[1/4] 安装专家角色 Profile..."
+# ----------------------------------------------------------
+# 步骤 1: 安装 Profile
+# ----------------------------------------------------------
+echo -e "[1/4] 安装专家角色 Profile..."
 
 PROFILES=(
-    "orchestrator"
-    "product-manager"
-    "tech-lead"
-    "backend-engineer"
-    "frontend-engineer"
-    "data-scientist"
-    "data-engineer"
-    "code-reviewer"
-    "security-auditor"
-    "qa-engineer"
-    "devops-engineer"
-    "technical-writer"
+    "orchestrator" "product-manager" "tech-lead" "backend-engineer"
+    "frontend-engineer" "data-scientist" "data-engineer" "code-reviewer"
+    "security-auditor" "qa-engineer" "devops-engineer" "technical-writer"
 )
 
-INSTALLED=0
 for profile in "${PROFILES[@]}"; do
     profile_dir="$PROFILES_DIR/$profile"
-    if [ -d "$profile_dir" ]; then
-        echo "  ♻️  $profile (已存在，更新 SOUL.md 和 config.yaml)"
+    mkdir -p "$profile_dir/skills" "$profile_dir/memories"
+    
+    # 复制 SOUL.md 和 config.yaml (使用脚本所在目录相对路径)
+    # 注意：setup-expert-team.sh 应该在 profiles/ 同级目录运行，或者在仓库根目录运行
+    # 我们假设用户在仓库根目录运行，所以路径是 profiles/$profile/
+    SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+    
+    if [ -f "$SCRIPT_DIR/profiles/$profile/SOUL.md" ]; then
+        cp "$SCRIPT_DIR/profiles/$profile/SOUL.md" "$profile_dir/SOUL.md"
+        echo -e "  ✅ ${GREEN}$profile${NC}: SOUL.md 更新"
+    elif [ -d "$profile_dir" ]; then
+        echo -e "  ⚠️  ${YELLOW}$profile${NC}: SOUL.md 未找到 (跳过)"
     else
-        echo "  📦 创建 $profile..."
-        mkdir -p "$profile_dir/skills" "$profile_dir/memories"
+        echo -e "  ❌ ${RED}$profile${NC}: 缺少 SOUL.md"
     fi
-    # 复制 SOUL.md
-    if [ -f "profiles/$profile/SOUL.md" ]; then
-        cp "profiles/$profile/SOUL.md" "$profile_dir/SOUL.md"
+    
+    if [ -f "$SCRIPT_DIR/profiles/$profile/config.yaml" ]; then
+        cp "$SCRIPT_DIR/profiles/$profile/config.yaml" "$profile_dir/config.yaml"
     fi
-    # 复制 config.yaml
-    if [ -f "profiles/$profile/config.yaml" ]; then
-        cp "profiles/$profile/config.yaml" "$profile_dir/config.yaml"
-    fi
-    INSTALLED=$((INSTALLED + 1))
 done
-echo "  ✅ $INSTALLED 个 Profile 已安装/更新"
-
-# ---- 步骤 2: 配置 Kanban ----
-echo ""
-echo "[2/4] 配置 Kanban..."
-
-hermes config set kanban.orchestrator_profile orchestrator 2>/dev/null || true
-hermes config set kanban.auto_decompose true 2>/dev/null || true
-hermes config set kanban.auto_decompose_per_tick 3 2>/dev/null || true
-hermes config set kanban.dispatch_in_gateway true 2>/dev/null || true
-hermes config set kanban.dispatch_interval_seconds 60 2>/dev/null || true
-hermes config set kanban.failure_limit 2 2>/dev/null || true
-hermes config set kanban.dispatch_stale_timeout_seconds 14400 2>/dev/null || true
-
-echo "  ✅ orchestrator_profile: orchestrator"
-echo "  ✅ auto_decompose: true"
-echo "  ✅ dispatch_interval: 60s"
-
-# ---- 步骤 3: 启动 Gateway ----
-echo ""
-echo "[3/4] 启动专家 Gateway..."
-echo "（每个角色一个独立 Gateway 进程，内存预算 ~3.5GB）"
 echo ""
 
-RUNNING=0
-FAILED=0
-for profile in "${PROFILES[@]}"; do
-    if hermes gateway status -p "$profile" 2>/dev/null | grep -q "running"; then
-        echo "  ✅ $profile (已在运行)"
-        RUNNING=$((RUNNING + 1))
-    else
-        echo "  🚀 启动 $profile..."
-        if hermes gateway start -p "$profile" 2>/dev/null; then
-            echo "    → $profile 已启动"
-            RUNNING=$((RUNNING + 1))
+# ----------------------------------------------------------
+# 步骤 2: 配置 Kanban
+# ----------------------------------------------------------
+echo -e "[2/4] 配置 Kanban..."
+
+kanban_set() {
+    local key=$1
+    local value=$2
+    # 使用 sed 更新配置文件，如果 key 不存在则追加
+    if grep -q "$key:" "$CONFIG_FILE" 2>/dev/null; then
+        # macOS sed 需要 '' 参数
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            sed -i '' "s|^  $key:.*|  $key: $value|" "$CONFIG_FILE"
         else
-            echo "    ❌ $profile 启动失败（检查 config.yaml 和端口占用）"
-            FAILED=$((FAILED + 1))
+            sed -i "s|^  $key:.*|  $key: $value|" "$CONFIG_FILE"
         fi
-    fi
-done
-
-echo ""
-echo "  Gateway 状态: $RUNNING 运行中, $FAILED 失败"
-
-# ---- 步骤 4: 部署验证 ----
-echo ""
-echo "[4/4] 部署验证..."
-echo ""
-
-PASS=0
-FAIL=0
-
-# 检查 1: 所有 Profile 目录存在
-for profile in "${PROFILES[@]}"; do
-    if [ -d "$PROFILES_DIR/$profile" ] && [ -f "$PROFILES_DIR/$profile/SOUL.md" ]; then
-        PASS=$((PASS + 1))
     else
-        echo "  ❌ $profile: SOUL.md 缺失"
-        FAIL=$((FAIL + 1))
+        echo "  kanban:" >> "$CONFIG_FILE"
+        echo "    $key: $value" >> "$CONFIG_FILE"
+    fi
+    echo -e "  ${GREEN}✓${NC} Set $key = $value"
+}
+
+kanban_set "kanban.orchestrator_profile" "orchestrator"
+kanban_set "kanban.auto_decompose" "true"
+kanban_set "kanban.auto_decompose_per_tick" "3"
+kanban_set "kanban.dispatch_in_gateway" "true"
+kanban_set "kanban.dispatch_interval_seconds" "60"
+kanban_set "kanban.failure_limit" "2"
+kanban_set "kanban.dispatch_stale_timeout_seconds" "14400"
+echo ""
+
+# ----------------------------------------------------------
+# 步骤 3: 启动 Gateway
+# ----------------------------------------------------------
+echo -e "[3/4] 检查/启动 Gateway..."
+
+# macOS 使用 launchctl, Linux 使用 systemd 或后台进程
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    echo "  (macOS 检测到，使用 launchctl 管理)"
+    # 检查 launchd 服务状态
+    if launchctl list | grep -q "ai.hermes.gateway"; then
+        echo -e "  ${GREEN}✅${NC} Hermes Gateway 已加载 (Launchd)"
+    else
+        echo -e "  ${YELLOW}⚠️${NC} Hermes Gateway 未加载。请运行: ${CYAN}hermes gateway start${NC}"
+    fi
+else
+    # Linux 检查
+    if hermes gateway status 2>/dev/null | grep -q "running"; then
+        echo -e "  ${GREEN}✅${NC} Hermes Gateway 运行中"
+    else
+        echo -e "  ${YELLOW}⚠️${NC} Hermes Gateway 未运行。尝试启动..."
+        hermes gateway start 2>/dev/null || echo -e "  ${RED}❌ 启动失败，请手动运行 hermes gateway start${NC}"
+    fi
+fi
+echo ""
+
+# ----------------------------------------------------------
+# 步骤 4: 部署验证 (更稳健的方式)
+# ----------------------------------------------------------
+echo -e "[4/4] 部署验证..."
+
+ERRORS=0
+
+# 1. 验证 Profile 目录
+for profile in "${PROFILES[@]}"; do
+    if [ ! -f "$PROFILES_DIR/$profile/SOUL.md" ]; then
+        echo -e "  ${RED}❌${NC} 缺失: $profile/SOUL.md"
+        ERRORS=$((ERRORS + 1))
     fi
 done
-echo "  ✅ Profile 目录: $((PASS - FAIL))/$((PASS)) 通过"
-
-# 检查 2: Kanban 配置
-ORCHESTRATOR_PROFILE=$(hermes config get kanban.orchestrator_profile 2>/dev/null || echo "")
-AUTO_DECOMPOSE=$(hermes config get kanban.auto_decompose 2>/dev/null || echo "")
-
-if [ "$ORCHESTRATOR_PROFILE" = "orchestrator" ]; then
-    echo "  ✅ kanban.orchestrator_profile = orchestrator"
-else
-    echo "  ❌ kanban.orchestrator_profile = '$ORCHESTRATOR_PROFILE' (期望 'orchestrator')"
+if [ $ERRORS -eq 0 ]; then
+    echo -e "  ${GREEN}✅${NC} 12 个 Profile 已正确安装"
 fi
 
-if [ "$AUTO_DECOMPOSE" = "true" ]; then
-    echo "  ✅ kanban.auto_decompose = true"
+# 2. 验证 Kanban 配置 (直接读取文件，不依赖 CLI)
+echo ""
+if grep -q "auto_decompose: true" "$CONFIG_FILE"; then
+    echo -e "  ${GREEN}✅${NC} kanban.auto_decompose = true"
 else
-    echo "  ❌ kanban.auto_decompose = '$AUTO_DECOMPOSE' (期望 'true')"
+    echo -e "  ${RED}❌${NC} kanban.auto_decompose 未配置为 true (请检查 $CONFIG_FILE)"
+    ERRORS=$((ERRORS + 1))
 fi
 
-# 检查 3: Gateway 状态
-echo ""
-GW_RUNNING=$(hermes gateway status 2>/dev/null | grep -c "running" || echo "0")
-echo "  Gateway 运行中: $GW_RUNNING / ${#PROFILES[@]}"
-
-if [ "$GW_RUNNING" -ge "$(( ${#PROFILES[@]} / 2 ))" ]; then
-    echo "  ✅ 超过半数 Gateway 正常运行"
+if grep -q "orchestrator_profile: orchestrator" "$CONFIG_FILE"; then
+    echo -e "  ${GREEN}✅${NC} kanban.orchestrator_profile = orchestrator"
 else
-    echo "  ⚠️  运行中的 Gateway 不足半数，请检查日志"
+    echo -e "  ${RED}❌${NC} kanban.orchestrator_profile 未配置 (请检查 $CONFIG_FILE)"
+    ERRORS=$((ERRORS + 1))
 fi
 
-# ---- 完成 ----
 echo ""
-echo "============================================================"
-echo "  部署完成！"
-echo "============================================================"
-echo ""
-echo "专家团角色列表 (12 个):"
-echo "  🧠 orchestrator      — 中枢调度（任务分解、路由、进度跟踪）"
-echo "  📋 product-manager   — 产品经理（需求分析、PRD、UAT验收）"
-echo "  🏗️  tech-lead         — 技术负责人（架构设计、技术选型、DAG规划）"
-echo "  💻 backend-engineer  — 后端工程师（API、数据库、服务逻辑）"
-echo "  🎨 frontend-engineer — 前端工程师（UI组件、交互、状态管理）"
-echo "  📊 data-scientist    — 数据科学家（数据分析、ML、统计建模）"
-echo "  🔧 data-engineer     — 数据工程师（数据管道、向量库、RAG管线）"
-echo "  🔍 code-reviewer     — 代码审查（架构审查、代码审查）"
-echo "  🛡️  security-auditor  — 安全审计（两阶段安全审查、漏洞扫描）"
-echo "  🧪 qa-engineer       — QA工程师（测试设计、自动化测试）"
-echo "  🔧 devops-engineer   — 运维工程师（CI/CD、容器化、部署）"
-echo "  📝 technical-writer  — 技术文档（README、API文档、Changelog）"
-echo ""
-echo "使用方法:"
-echo "  1. 通过 orchestrator 创建需求:"
-echo "     hermes -p orchestrator '帮我做一个短链服务'"
-echo "  2. 或者直接在 Kanban 创建 triage 任务:"
-echo "     hermes kanban create '做一个XXX' --status triage"
-echo "     → 自动触发 orchestrator 拆解为 DAG 任务链"
-echo ""
-echo "查看状态:"
-echo "  hermes kanban list              # 查看所有任务"
-echo "  hermes kanban show <id> --tree  # 查看任务依赖图"
-echo "  hermes gateway status           # 查看 Gateway 状态"
-echo ""
-echo "管理 Gateway:"
-echo "  hermes gateway start -p <profile>  # 启动指定角色"
-echo "  hermes gateway stop -p <profile>   # 停止指定角色"
-echo ""
+if [ $ERRORS -eq 0 ]; then
+    echo -e "============================================================"
+    echo -e "  ${GREEN}🎉 部署成功！一切正常。${NC}"
+    echo -e "============================================================"
+    echo ""
+    echo "接下来你可以："
+    echo "  1. hermes kanban create 'Build a URL shortener' --status triage"
+    echo "  2. hermes kanban list"
+else
+    echo -e "============================================================"
+    echo -e "  ${RED}⚠️  部署有 $ERRORS 个问题。${NC}"
+    echo -e "============================================================"
+    echo ""
+    echo "请检查上面的错误提示，或查看日志: ~/.hermes/logs/"
+fi
