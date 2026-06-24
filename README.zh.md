@@ -127,12 +127,17 @@ Rigor/                          # 32 个文件，约 30KB
 │       ├── effectiveness.json    # 效果追踪 + 衰减规则
 │       ├── project-profiles.json # 自动注入规则
 │       └── edges.json            # 知识关系图谱
-├── docs/
-│   └── quickstart.md           # 5 分钟上手指南
-├── README.md                   # 英文
-├── README.zh.md                # 中文
-├── README.ja.md                # 日本語
-├── LICENSE                     # MIT
+├── docs/                         # 文档
+│   ├── architecture.md           # 系统架构
+│   ├── quickstart.md             # 5 分钟上手
+│   └── troubleshooting.md        # 常见问题排查
+├── examples/                     # 示例项目
+│   └── url-shortener/            # 完整项目产出示例
+├── CONTRIBUTING.md               # 贡献指南
+├── README.md                     # 英文
+├── README.zh.md                  # 中文
+├── README.ja.md                  # 日本語
+├── LICENSE                       # MIT
 └── .gitignore
 ```
 

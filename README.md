@@ -127,12 +127,17 @@ Rigor/                          # 32 files, ~30KB
 │       ├── effectiveness.json    # Effectiveness tracking + decay rules
 │       ├── project-profiles.json # Auto-inject rules
 │       └── edges.json            # Knowledge relationship graph
-├── docs/
-│   └── quickstart.md           # 5-minute guide
-├── README.md                   # English
-├── README.zh.md                # 中文
-├── README.ja.md                # 日本語
-├── LICENSE                     # MIT
+├── docs/                         # Documentation
+│   ├── architecture.md           # System architecture
+│   ├── quickstart.md             # 5-minute guide
+│   └── troubleshooting.md        # Common issues and fixes
+├── examples/                     # Example projects
+│   └── url-shortener/            # Full project output example
+├── CONTRIBUTING.md               # How to contribute
+├── README.md                     # English
+├── README.zh.md                  # 中文
+├── README.ja.md                  # 日本語
+├── LICENSE                       # MIT
 └── .gitignore
 ```
 
