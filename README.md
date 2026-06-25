@@ -155,23 +155,44 @@ Cursor is an excellent AI coding assistant that helps **you** write code. But it
 
 Rigor is an **autonomous AI team** — you provide the requirement, the rest is handled.
 
-## Task Management
+## Task Management (Real-world Examples)
 
-### ✏️ Modify Task
-After creating a task, you don't need to delete it to make changes:
-*   **Recommended: Add Comment** (Agents auto-read comments in ~60s):
+**Context**: Imagine you just created a task (`t_123456`) to "Build a GitHub Trend Collector". Here is how you manage it.
+
+### ✏️ Correcting a Task (Mid-flight)
+You noticed the task description lacked a requirement (e.g., "Sort by stars"), and the Agent is already working on it. **Do NOT delete the task.**
+
+*   **Add a Comment (Recommended)**: The Agents read new comments in the next ~60s cycle.
     ```bash
-    hermes kanban comment <id> "Correction: Sort by Stars only. Change theme to dark blue."
+    # Example: Adding a sorting requirement to the running task
+    hermes kanban comment t_123456 "Correction: Please sort repositories by 'Most Stars' in descending order. Also, use a dark blue theme."
     ```
-*   **Update Description**:
+*   **Update Description**: Rewrites the task card itself.
     ```bash
-    hermes kanban update <id> --body "New description..."
+    hermes kanban update t_123456 --body "New complete description..."
     ```
 
-### 🛑 Stop Task
-*   **Block** (Stop immediately): `hermes kanban block <id> "Cancelled"`
-*   **Reset** (Revert to todo): `hermes kanban reset <id>`
-*   **Archive** (Hide from list): `hermes kanban archive <id>`
+### 🛑 Stopping or Resetting
+The task is stuck, the API is throwing errors, or you want to stop it to save money.
+
+*   **Stop (Block)**: Freezes the task and prevents sub-tasks from running.
+    ```bash
+    hermes kanban block t_123456 "Cancelled: API rate limit exceeded"
+    ```
+*   **Reset**: Moves the task back to `todo` status so it can be retried (useful if an Agent failed due to a temporary glitch).
+    ```bash
+    hermes kanban reset t_123456
+    ```
+*   **Archive**: Hides the task from the main list (good for cleanup, data is preserved).
+    ```bash
+    hermes kanban archive t_123456
+    ```
+
+### 🧹 Cleanup
+To hide all completed tasks:
+```bash
+hermes kanban list --status done | grep -oE 't_[a-f0-9]+' | xargs -I {} hermes kanban archive {}
+```
 
 ## Knowledge Base
 
