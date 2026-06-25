@@ -222,89 +222,26 @@
             border: 1px solid var(--border);
         }
 
-        /* 结果区 */
-        .result-area {
-            display: none;
-            text-align: center;
-        }
-        .result-area h2 {
-            color: var(--success);
-            margin-bottom: 0.5rem;
-        }
-        .link-box {
-            background: var(--bg-primary);
-            border: 1px dashed var(--accent);
-            padding: 1rem;
-            margin: 1.5rem 0;
-            border-radius: 8px;
-            font-family: monospace;
-            word-break: break-all;
-            color: var(--accent);
-            font-size: 1.1rem;
-        }
-        .copy-hint {
-            color: var(--text-secondary);
-            font-size: 0.85rem;
-            margin-top: 0.5rem;
-        }
-
         /* 查看模式 */
-        .view-area {
-            display: none;
-        }
-        .content-display {
-            background: #282c34;
-            border-radius: 8px;
-            overflow: hidden;
-        }
-        .content-display pre {
-            margin: 0;
-            padding: 1.5rem;
-            max-height: 500px;
-            overflow: auto;
-        }
-        .burned-message {
-            display: none;
-            text-align: center;
-            padding: 3rem;
-        }
-        .burned-message h2 {
-            color: var(--danger);
-            font-size: 2rem;
-            margin-bottom: 1rem;
-        }
-        .burned-message p {
-            color: var(--text-secondary);
-        }
-        .burned-icon {
-            font-size: 4rem;
-            margin-bottom: 1rem;
-        }
-
-        /* 元信息 */
+        .view-area { display: none; }
+        .burned-message { display: none; text-align: center; padding: 3rem; }
+        .burned-message h2 { color: var(--danger); font-size: 2rem; margin-bottom: 1rem; }
+        .burned-message p { color: var(--text-secondary); }
+        .burned-icon { font-size: 4rem; margin-bottom: 1rem; }
+        .content-display pre { margin: 0; padding: 1.5rem; max-height: 500px; overflow: auto; }
+        .content-display { background: #282c34; border-radius: 8px; overflow: hidden; }
         .meta-info {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-top: 1rem;
-            padding-top: 1rem;
-            border-top: 1px solid var(--border);
-            color: var(--text-secondary);
-            font-size: 0.85rem;
+            display: flex; justify-content: space-between; align-items: center;
+            margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);
+            color: var(--text-secondary); font-size: 0.85rem;
         }
         .tag {
-            background: rgba(59,130,246,0.1);
-            color: var(--accent);
-            padding: 0.25rem 0.75rem;
-            border-radius: 999px;
-            font-size: 0.8rem;
+            background: rgba(59,130,246,0.1); color: var(--accent);
+            padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.8rem;
         }
-        .tag.burn {
-            background: rgba(239,68,68,0.1);
-            color: var(--danger);
-        }
+        .tag.burn { background: rgba(239,68,68,0.1); color: var(--danger); }
 
-        /* 密码弹窗 */
+        /* 结果弹窗 */
         .modal-overlay {
             display: none;
             position: fixed;
@@ -320,8 +257,14 @@
             border: 1px solid var(--border);
             border-radius: 12px;
             padding: 2rem;
-            width: 350px;
+            width: 450px;
+            max-width: 90vw;
             text-align: center;
+            animation: modalIn 0.25s ease-out;
+        }
+        @keyframes modalIn {
+            from { opacity: 0; transform: scale(0.9) translateY(20px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
         }
         .modal-content h3 {
             margin-bottom: 0.5rem;
@@ -340,12 +283,57 @@
             letter-spacing: 0.2em;
         }
 
+        /* 成功弹窗 */
+        .success-icon { font-size: 3rem; margin-bottom: 0.5rem; }
+        .result-url {
+            background: var(--bg-secondary);
+            border: 1px dashed var(--accent);
+            padding: 0.75rem;
+            margin: 1rem 0;
+            border-radius: 8px;
+            font-family: monospace;
+            word-break: break-all;
+            color: var(--accent);
+            font-size: 0.85rem;
+        }
+        .btn-group {
+            display: flex; gap: 0.75rem; margin-top: 1.5rem;
+        }
+        .btn-group .btn { flex: 1; max-width: none; font-size: 0.9rem; padding: 0.75rem; }
+
+        /* 失败弹窗 */
+        .error-icon { font-size: 3rem; margin-bottom: 0.5rem; }
+        .error-detail {
+            background: rgba(239,68,68,0.1);
+            border: 1px solid rgba(239,68,68,0.2);
+            border-radius: 8px;
+            padding: 0.75rem;
+            margin: 1rem 0;
+            color: var(--danger);
+            font-family: monospace;
+            font-size: 0.8rem;
+            word-break: break-all;
+        }
+
+        /* Loading spinner */
+        .spinner {
+            display: inline-block;
+            width: 18px; height: 18px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
         /* 响应式 */
         @media (max-width: 600px) {
             .container { padding: 1.5rem; }
             .logo { font-size: 2rem; }
             .features { gap: 1rem; }
             .options-grid { grid-template-columns: 1fr; }
+            .modal-content { width: 95vw; padding: 1.5rem; }
+            .btn-group { flex-direction: column; }
         }
     </style>
 </head>
@@ -394,19 +382,9 @@
                     </div>
                 </div>
 
-                <button class="btn" onclick="createPaste()" style="margin-top: 1.5rem;">
+                <button class="btn" onclick="createPaste()" style="margin-top: 1.5rem;" id="create-btn">
                     🔒 加密并创建分享链接
                 </button>
-            </div>
-
-            <div id="result" class="card result-area">
-                <h2>✅ 分享链接已生成!</h2>
-                <p class="subtitle">此链接将<span style="color: var(--danger)">阅后即焚</span>，请妥善保管。</p>
-                <div class="link-box" id="link-display"></div>
-                <button class="btn btn-secondary" onclick="copyLink()" style="max-width: 200px; margin: 0 auto;">
-                    📋 复制链接
-                </button>
-                <p class="copy-hint">点击链接即可查看内容，查看后内容将永久消失</p>
             </div>
         </div>
 
@@ -417,23 +395,22 @@
                 <p class="subtitle">查看机密内容</p>
             </div>
 
-            <div id="burned" class="card burned-message">
+            <div id="burned" class="card burned-message" style="display:none;">
                 <div class="burned-icon">💨</div>
                 <h2>POOF!</h2>
                 <p>此内容已被阅后即焚，永久删除。</p>
                 <p style="margin-top: 1rem; font-size: 0.85rem; color: #4b5563;">没有人可以再看到它，包括服务器。</p>
             </div>
 
-            <div id="content-display" class="card">
+            <div id="content-display" class="card" style="display:none;">
                 <div class="content-display">
                     <pre><code id="code-content" class="language-javascript">// 加载中...</code></pre>
                 </div>
                 <div class="meta-info">
                     <div>
-                        <span class="tag" id="expire-tag">⏱️ 24小时后过期</span>
-                        <span class="tag burn" id="burn-tag">🔥 阅后即焚</span>
+                        <span class="tag burn">🔥 阅后即焚</span>
                     </div>
-                    <span id="created-at">创建于: 刚刚</span>
+                    <span id="expire-time"></span>
                 </div>
                 <button class="btn btn-secondary" onclick="copyContent()" style="margin-top: 1rem;">
                     📋 复制内容
@@ -441,8 +418,33 @@
             </div>
         </div>
 
+        <!-- 成功弹窗 -->
+        <div id="success-modal" class="modal-overlay" onclick="closeModal(event)">
+            <div class="modal-content">
+                <div class="success-icon">✅</div>
+                <h3 style="color: var(--success);">分享链接已生成!</h3>
+                <p id="success-subtitle">此链接将在查看后<span style="color: var(--danger)">阅后即焚</span>。</p>
+                <div class="result-url" id="result-url"></div>
+                <div class="btn-group">
+                    <button class="btn" onclick="copyLinkFromModal()">📋 复制链接</button>
+                    <button class="btn btn-secondary" onclick="closeSuccessModal()">关闭</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 失败弹窗 -->
+        <div id="error-modal" class="modal-overlay" onclick="closeModal(event)">
+            <div class="modal-content">
+                <div class="error-icon">❌</div>
+                <h3 style="color: var(--danger);">创建失败</h3>
+                <p>无法创建分享链接，请检查以下错误：</p>
+                <div class="error-detail" id="error-detail"></div>
+                <button class="btn" onclick="closeErrorModal()" style="margin-top: 1rem;">我知道了</button>
+            </div>
+        </div>
+
         <!-- 密码弹窗 -->
-        <div id="pwd-modal" class="modal-overlay">
+        <div id="pwd-modal" class="modal-overlay" onclick="closeModal(event)">
             <div class="modal-content">
                 <h3>🔒 密码保护</h3>
                 <p>此内容受密码保护，请输入密码继续查看。</p>
@@ -460,23 +462,14 @@
     </div>
 
     <script>
-        // --- 模拟 API ---
-        const API_BASE = '/api/v1'; // 替换为实际后端地址
+        const API_BASE = '/api/v1';
 
-        // 生成链接
-        function createLink(id) {
-            return `${window.location.origin}/p/${id}`;
-        }
+        // ---- 弹窗控制 ----
+        function closeModal(e) { if (e.target.classList.contains('modal-overlay')) e.target.style.display = 'none'; }
+        function closeSuccessModal() { document.getElementById('success-modal').style.display = 'none'; }
+        function closeErrorModal() { document.getElementById('error-modal').style.display = 'none'; }
 
-        // 浏览器兼容 UUID 生成 (fallback for older browsers without crypto.randomUUID)
-        function generateUUID() {
-            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-                var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-                return v.toString(16);
-            });
-        }
-
-        // 创建 Paste
+        // ---- 创建 Paste ----
         async function createPaste() {
             const content = document.getElementById('content').value;
             if (!content.trim()) return alert("内容不能为空!");
@@ -488,11 +481,11 @@
                 burn_after_read: document.getElementById('burn').checked
             };
 
-            try {
-                const btn = document.querySelector('.btn');
-                btn.disabled = true;
-                btn.textContent = '⏳ 创建中...';
+            const btn = document.getElementById('create-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> 加密创建中...';
 
+            try {
                 const res = await fetch(`${API_BASE}/pastes`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -500,63 +493,70 @@
                 });
 
                 if (!res.ok) {
-                    const err = await res.text();
-                    throw new Error(`创建失败: ${err}`);
+                    let msg;
+                    try { msg = await res.text(); } catch { msg = `HTTP ${res.status}`; }
+                    throw new Error(msg);
                 }
 
                 const data = await res.json();
-                document.getElementById('link-display').textContent = `${window.location.origin}${data.url}`;
-                document.getElementById('result').style.display = 'block';
+                const url = `${window.location.origin}${data.url}`;
+                document.getElementById('result-url').textContent = url;
+                document.getElementById('success-subtitle').innerHTML = payload.burn_after_read
+                    ? '此链接将在查看后<span style="color:var(--danger)">阅后即焚</span>。'
+                    : `此链接将在 <span style="color:var(--warning)">${formatExpiry(payload.expiration_seconds)}</span> 后过期。`;
+                document.getElementById('success-modal').style.display = 'flex';
             } catch (e) {
-                alert(`❌ ${e.message}`);
+                document.getElementById('error-detail').textContent = e.message;
+                document.getElementById('error-modal').style.display = 'flex';
             } finally {
-                const btn = document.querySelector('.btn');
                 btn.disabled = false;
                 btn.innerHTML = '🔒 加密并创建分享链接';
             }
         }
 
-        // 通用复制函数（兼容非 HTTPS 环境）
+        function formatExpiry(seconds) {
+            if (seconds < 3600) return `${seconds / 60} 分钟`;
+            if (seconds < 86400) return `${seconds / 3600} 小时`;
+            return `${seconds / 86400} 天`;
+        }
+
+        // ---- 复制 ----
         function fallbackCopy(text) {
             const ta = document.createElement('textarea');
-            ta.value = text;
-            ta.style.position = 'fixed';
-            ta.style.left = '-9999px';
-            document.body.appendChild(ta);
-            ta.select();
-            try {
-                document.execCommand('copy');
-                return true;
-            } catch (e) {
-                return false;
-            } finally {
-                document.body.removeChild(ta);
-            }
+            ta.value = text; ta.style.position = 'fixed'; ta.style.left = '-9999px';
+            document.body.appendChild(ta); ta.select();
+            try { document.execCommand('copy'); return true; }
+            catch { return false; }
+            finally { document.body.removeChild(ta); }
         }
 
-        function copyLink() {
-            const text = document.getElementById('link-display').textContent;
+        function copyText(text, successMsg, failMsg) {
             const ok = (navigator.clipboard && navigator.clipboard.writeText)
                 ? navigator.clipboard.writeText(text).then(() => true).catch(() => fallbackCopy(text))
                 : Promise.resolve(fallbackCopy(text));
             ok.then(success => {
-                if (success) alert("✅ 链接已复制到剪贴板!");
-                else alert("❌ 复制失败，请手动复制");
+                alert(success ? successMsg : failMsg);
             });
         }
+
+        function copyLinkFromModal() {
+            copyText(
+                document.getElementById('result-url').textContent,
+                "✅ 链接已复制到剪贴板!",
+                "❌ 复制失败，请手动选择链接复制"
+            );
+        }
+
         function copyContent() {
-            const text = document.getElementById('code-content').textContent;
-            const ok = (navigator.clipboard && navigator.clipboard.writeText)
-                ? navigator.clipboard.writeText(text).then(() => true).catch(() => fallbackCopy(text))
-                : Promise.resolve(fallbackCopy(text));
-            ok.then(success => {
-                if (success) alert("✅ 内容已复制到剪贴板!");
-                else alert("❌ 复制失败，请手动复制");
-            });
+            copyText(
+                document.getElementById('code-content').textContent,
+                "✅ 内容已复制到剪贴板!",
+                "❌ 复制失败，请手动选择内容复制"
+            );
         }
 
-        // --- 查看模式 (真实 API) ---
-        // 匹配 /p/{id} 路径或 ?id=xxx 参数
+        // ---- 查看模式 ----
+        const urlParams = new URLSearchParams(window.location.search);
         let pasteId = null;
         const pathParts = window.location.pathname.split('/');
         if (pathParts.length >= 3 && pathParts[1] === 'p') {
@@ -574,30 +574,21 @@
         async function loadPaste(id) {
             try {
                 const res = await fetch(`${API_BASE}/pastes/${id}`);
-
                 if (res.status === 401) {
-                    // 需要密码
                     document.getElementById('pwd-modal').style.display = 'flex';
                     window._pendingPasteId = id;
                     return;
                 }
-
                 if (res.status === 404) {
-                    document.getElementById('content-display').style.display = 'none';
                     document.getElementById('burned').style.display = 'block';
                     return;
                 }
-
-                if (!res.ok) {
-                    throw new Error(`加载失败: ${res.status}`);
-                }
-
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const data = await res.json();
                 displayContent(data.content, data.expires_at);
             } catch (e) {
-                document.getElementById('content-display').style.display = 'none';
+                document.getElementById('burned').querySelector('p').textContent = `❌ ${e.message}`;
                 document.getElementById('burned').style.display = 'block';
-                document.querySelector('#burned p').textContent = `❌ ${e.message}`;
             }
         }
 
@@ -605,24 +596,19 @@
             const pwd = document.getElementById('pwd-input').value;
             const id = window._pendingPasteId;
             if (!id) return;
-
             try {
                 const res = await fetch(`${API_BASE}/pastes/${id}`, {
                     headers: { 'X-Paste-Password': pwd }
                 });
-
                 if (res.status === 401) {
                     document.getElementById('pwd-error').style.display = 'block';
                     return;
                 }
-
                 if (res.status === 404) {
                     document.getElementById('pwd-modal').style.display = 'none';
-                    document.getElementById('content-display').style.display = 'none';
                     document.getElementById('burned').style.display = 'block';
                     return;
                 }
-
                 const data = await res.json();
                 document.getElementById('pwd-modal').style.display = 'none';
                 displayContent(data.content, data.expires_at);
@@ -632,18 +618,19 @@
             }
         }
 
+        // Enter 键提交密码
+        document.getElementById('pwd-input').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') submitPassword();
+        });
+
         function displayContent(content, expiresAt) {
             const el = document.getElementById('code-content');
             el.textContent = content;
             hljs.highlightElement(el);
-
-            // 显示过期时间
             try {
                 const exp = new Date(expiresAt);
-                document.getElementById('created-at').textContent = `过期时间: ${exp.toLocaleString('zh-CN')}`;
-            } catch {
-                document.getElementById('created-at').textContent = '';
-            }
+                document.getElementById('expire-time').textContent = `过期: ${exp.toLocaleString('zh-CN')}`;
+            } catch { document.getElementById('expire-time').textContent = ''; }
         }
     </script>
 </body>
