@@ -624,6 +624,8 @@
         });
 
         function displayContent(content, expiresAt) {
+            document.getElementById('content-display').style.display = 'block';
+            document.getElementById('burned').style.display = 'none';
             const el = document.getElementById('code-content');
             el.textContent = content;
             hljs.highlightElement(el);
