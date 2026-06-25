@@ -468,6 +468,14 @@
             return `${window.location.origin}/p/${id}`;
         }
 
+        // 浏览器兼容 UUID 生成 (fallback for older browsers without crypto.randomUUID)
+        function generateUUID() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+
         // 创建 Paste
         async function createPaste() {
             const content = document.getElementById('content').value;
@@ -480,17 +488,32 @@
                 burn_after_read: document.getElementById('burn').checked
             };
 
-            // --- 模拟成功 ---
-            // 实际应调用: const res = await fetch(`${API_BASE}/pastes`, { method: 'POST', body: JSON.stringify(payload) });
-            console.log("POST", payload);
-            
-            // 模拟返回
-            const mockId = crypto.randomUUID();
-            const link = createLink(mockId);
-            
-            document.getElementById('link-display').textContent = link;
-            document.getElementById('result').style.display = 'block';
-            document.querySelector('.btn').disabled = true;
+            try {
+                const btn = document.querySelector('.btn');
+                btn.disabled = true;
+                btn.textContent = '⏳ 创建中...';
+
+                const res = await fetch(`${API_BASE}/pastes`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!res.ok) {
+                    const err = await res.text();
+                    throw new Error(`创建失败: ${err}`);
+                }
+
+                const data = await res.json();
+                document.getElementById('link-display').textContent = `${window.location.origin}${data.url}`;
+                document.getElementById('result').style.display = 'block';
+            } catch (e) {
+                alert(`❌ ${e.message}`);
+            } finally {
+                const btn = document.querySelector('.btn');
+                btn.disabled = false;
+                btn.innerHTML = '🔒 加密并创建分享链接';
+            }
         }
 
         // 复制
@@ -503,49 +526,95 @@
             alert("✅ 内容已复制到剪贴板!");
         }
 
-        // --- 查看模式 (Demo) ---
-        const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.get('demo') === '1' || window.location.pathname.includes('/p/')) {
+        // --- 查看模式 (真实 API) ---
+        // 匹配 /p/{id} 路径或 ?id=xxx 参数
+        let pasteId = null;
+        const pathParts = window.location.pathname.split('/');
+        if (pathParts.length >= 3 && pathParts[1] === 'p') {
+            pasteId = pathParts[2];
+        } else {
+            pasteId = urlParams.get('id');
+        }
+
+        if (pasteId) {
             document.getElementById('create-mode').style.display = 'none';
             document.getElementById('view-mode').style.display = 'block';
-            
-            // 模拟需要密码
-            const needsPwd = true;
-            if (needsPwd) {
-                document.getElementById('pwd-modal').style.display = 'flex';
-            } else {
-                showContent();
+            loadPaste(pasteId);
+        }
+
+        async function loadPaste(id) {
+            try {
+                const res = await fetch(`${API_BASE}/pastes/${id}`);
+
+                if (res.status === 401) {
+                    // 需要密码
+                    document.getElementById('pwd-modal').style.display = 'flex';
+                    window._pendingPasteId = id;
+                    return;
+                }
+
+                if (res.status === 404) {
+                    document.getElementById('content-display').style.display = 'none';
+                    document.getElementById('burned').style.display = 'block';
+                    return;
+                }
+
+                if (!res.ok) {
+                    throw new Error(`加载失败: ${res.status}`);
+                }
+
+                const data = await res.json();
+                displayContent(data.content, data.expires_at);
+            } catch (e) {
+                document.getElementById('content-display').style.display = 'none';
+                document.getElementById('burned').style.display = 'block';
+                document.querySelector('#burned p').textContent = `❌ ${e.message}`;
             }
         }
 
-        function submitPassword() {
+        async function submitPassword() {
             const pwd = document.getElementById('pwd-input').value;
-            if (pwd === 'demo') {
+            const id = window._pendingPasteId;
+            if (!id) return;
+
+            try {
+                const res = await fetch(`${API_BASE}/pastes/${id}`, {
+                    headers: { 'X-Paste-Password': pwd }
+                });
+
+                if (res.status === 401) {
+                    document.getElementById('pwd-error').style.display = 'block';
+                    return;
+                }
+
+                if (res.status === 404) {
+                    document.getElementById('pwd-modal').style.display = 'none';
+                    document.getElementById('content-display').style.display = 'none';
+                    document.getElementById('burned').style.display = 'block';
+                    return;
+                }
+
+                const data = await res.json();
                 document.getElementById('pwd-modal').style.display = 'none';
-                showContent();
-            } else {
+                displayContent(data.content, data.expires_at);
+            } catch (e) {
+                document.getElementById('pwd-error').textContent = `❌ ${e.message}`;
                 document.getElementById('pwd-error').style.display = 'block';
             }
         }
 
-        function showContent() {
-            const code = `import os
-
-# 🔥 这是一个阅后即焚的秘密
-SECRET_API_KEY = "sk-proj-xxxxxxxxxxxxxxxxxxxxxxx"
-DATABASE_URL = "postgresql://admin:super_secret@db.internal:5432/prod"
-
-# 此内容将在查看后自动销毁
-print("Secret loaded successfully")`;
-            
+        function displayContent(content, expiresAt) {
             const el = document.getElementById('code-content');
-            el.textContent = code;
+            el.textContent = content;
             hljs.highlightElement(el);
-            
-            // 模拟 10 秒后显示"已焚毁"提示
-            setTimeout(() => {
-                alert("🔥 提示：此内容已被标记为阅后即焚，刷新后内容将永久消失。");
-            }, 5000);
+
+            // 显示过期时间
+            try {
+                const exp = new Date(expiresAt);
+                document.getElementById('created-at').textContent = `过期时间: ${exp.toLocaleString('zh-CN')}`;
+            } catch {
+                document.getElementById('created-at').textContent = '';
+            }
         }
     </script>
 </body>

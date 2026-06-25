@@ -468,6 +468,14 @@
             return `${window.location.origin}/p/${id}`;
         }
 
+        // 浏览器兼容 UUID 生成 (fallback for older browsers without crypto.randomUUID)
+        function generateUUID() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+
         // 创建 Paste
         async function createPaste() {
             const content = document.getElementById('content').value;
@@ -485,7 +493,7 @@
             console.log("POST", payload);
             
             // 模拟返回
-            const mockId = crypto.randomUUID();
+            const mockId = (crypto.randomUUID ? crypto.randomUUID() : generateUUID());
             const link = createLink(mockId);
             
             document.getElementById('link-display').textContent = link;
