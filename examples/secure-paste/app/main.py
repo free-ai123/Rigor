@@ -1,4 +1,3 @@
-
 import os, uuid, sqlite3, bcrypt
 from datetime import datetime, timedelta
 from contextlib import contextmanager
@@ -10,22 +9,34 @@ from pydantic import BaseModel
 from cryptography.fernet import Fernet
 
 # --- Config ---
-# Fix: Docker compose might pass an empty string, check for that
-raw_key = os.getenv("AES_KEY")
-AES_KEY = raw_key if raw_key else Fernet.generate_key()
-if not raw_key:
-    print("⚠️ [SECURITY] AES_KEY not set. Using temporary key. Data will be lost on restart.")
-    
-f = Fernet(AES_KEY)
+# Docker 里 /app/data 有 volume 挂载，本地开发用相对路径
+DOCKER_DATA = "/app/data"
+LOCAL_DATA = os.path.join(os.path.dirname(__file__), "..", "data")
+DATA_DIR = DOCKER_DATA if os.path.exists(DOCKER_DATA) and os.access(DOCKER_DATA, os.W_OK) else LOCAL_DATA
+os.makedirs(DATA_DIR, exist_ok=True)
+DB_PATH = os.path.join(DATA_DIR, "securepaste.db")
+KEY_PATH = os.path.join(DATA_DIR, ".aes_key")
+
+def get_aes_key():
+    """优先使用环境变量，其次从 data/.aes_key 读取，最后生成新 key 并持久化"""
+    raw = os.getenv("AES_KEY")
+    if raw:
+        return raw
+    if os.path.exists(KEY_PATH):
+        with open(KEY_PATH) as f:
+            return f.read().strip()
+    key = Fernet.generate_key().decode()
+    with open(KEY_PATH, "w") as f:
+        f.write(key)
+    return key
+
+AES_KEY = get_aes_key()
+f = Fernet(AES_KEY.encode() if isinstance(AES_KEY, str) else AES_KEY)
 
 app = FastAPI(title="SecurePaste", version="1.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 # --- DB Setup ---
-DATA_DIR = os.path.join("/app", "data")
-os.makedirs(DATA_DIR, exist_ok=True)
-DB_PATH = os.path.join(DATA_DIR, "securepaste.db")
-
 def init_db():
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute("CREATE TABLE IF NOT EXISTS pastes (id TEXT PRIMARY KEY, content BLOB, password_hash TEXT, burn_after_read BOOLEAN, expires_at TEXT)")
@@ -43,9 +54,14 @@ class PasteReq(BaseModel):
 @app.get("/", response_class=HTMLResponse)
 async def index():
     try:
-        with open(os.path.join(os.path.dirname(__file__), "static", "index.html")) as f: return f.read()
+        with open(os.path.join(os.path.dirname(__file__), "static", "index.html")) as fh: return fh.read()
     except FileNotFoundError:
         return "Frontend not found"
+
+@app.get("/p/{pid}", response_class=HTMLResponse)
+async def view_paste(pid: str):
+    """返回前端页面，由前端 JS 解析 URL 中的 paste ID 并加载内容"""
+    return await index()
 
 @app.post("/api/v1/pastes")
 def create(req: PasteReq):
@@ -58,7 +74,6 @@ def create(req: PasteReq):
 
 def parse_datetime(s):
     """兼容 Python 3.6 的 ISO datetime 解析"""
-    # Python 3.6 没有 datetime.fromisoformat()，用 strptime 替代
     try:
         return datetime.strptime(s, "%Y-%m-%dT%H:%M:%S.%f")
     except ValueError:

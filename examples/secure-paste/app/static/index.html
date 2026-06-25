@@ -516,14 +516,43 @@
             }
         }
 
-        // 复制
+        // 通用复制函数（兼容非 HTTPS 环境）
+        function fallbackCopy(text) {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.left = '-9999px';
+            document.body.appendChild(ta);
+            ta.select();
+            try {
+                document.execCommand('copy');
+                return true;
+            } catch (e) {
+                return false;
+            } finally {
+                document.body.removeChild(ta);
+            }
+        }
+
         function copyLink() {
-            navigator.clipboard.writeText(document.getElementById('link-display').textContent);
-            alert("✅ 链接已复制到剪贴板!");
+            const text = document.getElementById('link-display').textContent;
+            const ok = (navigator.clipboard && navigator.clipboard.writeText)
+                ? navigator.clipboard.writeText(text).then(() => true).catch(() => fallbackCopy(text))
+                : Promise.resolve(fallbackCopy(text));
+            ok.then(success => {
+                if (success) alert("✅ 链接已复制到剪贴板!");
+                else alert("❌ 复制失败，请手动复制");
+            });
         }
         function copyContent() {
-            navigator.clipboard.writeText(document.getElementById('code-content').textContent);
-            alert("✅ 内容已复制到剪贴板!");
+            const text = document.getElementById('code-content').textContent;
+            const ok = (navigator.clipboard && navigator.clipboard.writeText)
+                ? navigator.clipboard.writeText(text).then(() => true).catch(() => fallbackCopy(text))
+                : Promise.resolve(fallbackCopy(text));
+            ok.then(success => {
+                if (success) alert("✅ 内容已复制到剪贴板!");
+                else alert("❌ 复制失败，请手动复制");
+            });
         }
 
         // --- 查看模式 (真实 API) ---
