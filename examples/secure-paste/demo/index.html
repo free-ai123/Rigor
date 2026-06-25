@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔥 SecurePaste - 阅后即焚的秘密分享</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/atom-one-dark.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+    <style>
+        :root {
+            --bg-primary: #0a0e17;
+            --bg-secondary: #111827;
+            --bg-card: #1f2937;
+            --border: #374151;
+            --text-primary: #f9fafb;
+            --text-secondary: #9ca3af;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --danger: #ef4444;
+            --success: #10b981;
+            --warning: #f59e0b;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+
+        /* 动画背景 */
+        .bg-animation {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: -1;
+            overflow: hidden;
+        }
+        .bg-animation::before {
+            content: '';
+            position: absolute;
+            width: 200%; height: 200%;
+            top: -50%; left: -50%;
+            background: radial-gradient(ellipse at center, rgba(59,130,246,0.08) 0%, transparent 70%);
+            animation: pulse 8s ease-in-out infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 0.5; }
+            50% { transform: scale(1.1); opacity: 1; }
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 3rem 1.5rem;
+        }
+
+        /* Logo & Header */
+        .header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+        .logo {
+            font-size: 3rem;
+            margin-bottom: 0.5rem;
+        }
+        .logo span {
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+        }
+        .features {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            margin-top: 1.5rem;
+            flex-wrap: wrap;
+        }
+        .feature {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+        .feature span:first-child {
+            font-size: 1.2rem;
+        }
+
+        /* 卡片 */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+        }
+        .card h3 {
+            margin-bottom: 1rem;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* 表单 */
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+        textarea {
+            width: 100%;
+            min-height: 160px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            font-family: 'Fira Code', 'Cascadia Code', monospace;
+            font-size: 0.9rem;
+            color: var(--text-primary);
+            resize: vertical;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        textarea:focus {
+            border-color: var(--accent);
+        }
+        textarea::placeholder {
+            color: #4b5563;
+        }
+
+        /* 选项网格 */
+        .options-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1rem;
+        }
+        .option-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+        select, input[type="text"], input[type="password"] {
+            width: 100%;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 0.75rem;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            outline: none;
+        }
+        select:focus, input:focus {
+            border-color: var(--accent);
+        }
+
+        /* 复选框 */
+        .checkbox-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-top: 1.5rem;
+            padding: 1rem;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            border-radius: 8px;
+        }
+        input[type="checkbox"] {
+            width: 20px; height: 20px;
+            accent-color: var(--danger);
+        }
+        .checkbox-label {
+            font-weight: 500;
+        }
+        .checkbox-desc {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        /* 按钮 */
+        .btn {
+            background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: transform 0.2s, opacity 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            opacity: 0.9;
+        }
+        .btn:active {
+            transform: translateY(0);
+        }
+        .btn-secondary {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+        }
+
+        /* 结果区 */
+        .result-area {
+            display: none;
+            text-align: center;
+        }
+        .result-area h2 {
+            color: var(--success);
+            margin-bottom: 0.5rem;
+        }
+        .link-box {
+            background: var(--bg-primary);
+            border: 1px dashed var(--accent);
+            padding: 1rem;
+            margin: 1.5rem 0;
+            border-radius: 8px;
+            font-family: monospace;
+            word-break: break-all;
+            color: var(--accent);
+            font-size: 1.1rem;
+        }
+        .copy-hint {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            margin-top: 0.5rem;
+        }
+
+        /* 查看模式 */
+        .view-area {
+            display: none;
+        }
+        .content-display {
+            background: #282c34;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .content-display pre {
+            margin: 0;
+            padding: 1.5rem;
+            max-height: 500px;
+            overflow: auto;
+        }
+        .burned-message {
+            display: none;
+            text-align: center;
+            padding: 3rem;
+        }
+        .burned-message h2 {
+            color: var(--danger);
+            font-size: 2rem;
+            margin-bottom: 1rem;
+        }
+        .burned-message p {
+            color: var(--text-secondary);
+        }
+        .burned-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+        }
+
+        /* 元信息 */
+        .meta-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border);
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+        .tag {
+            background: rgba(59,130,246,0.1);
+            color: var(--accent);
+            padding: 0.25rem 0.75rem;
+            border-radius: 999px;
+            font-size: 0.8rem;
+        }
+        .tag.burn {
+            background: rgba(239,68,68,0.1);
+            color: var(--danger);
+        }
+
+        /* 密码弹窗 */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8);
+            z-index: 100;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 2rem;
+            width: 350px;
+            text-align: center;
+        }
+        .modal-content h3 {
+            margin-bottom: 0.5rem;
+        }
+        .modal-content p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-bottom: 1.5rem;
+        }
+        .modal-input {
+            margin-bottom: 1rem;
+        }
+        .modal-input input {
+            text-align: center;
+            font-size: 1rem;
+            letter-spacing: 0.2em;
+        }
+
+        /* 响应式 */
+        @media (max-width: 600px) {
+            .container { padding: 1.5rem; }
+            .logo { font-size: 2rem; }
+            .features { gap: 1rem; }
+            .options-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-animation"></div>
+    <div class="container">
+        <!-- 创建模式 -->
+        <div id="create-mode">
+            <div class="header">
+                <div class="logo">🔥 <span>SecurePaste</span></div>
+                <p class="subtitle">端到端加密 · 阅后即焚的秘密分享</p>
+                <div class="features">
+                    <div class="feature"><span>🔒</span> AES-256 加密</div>
+                    <div class="feature"><span>🔥</span> 阅后即焚</div>
+                    <div class="feature"><span>⏱️</span> 自动过期</div>
+                    <div class="feature"><span>🔑</span> 密码保护</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="form-group">
+                    <label>📝 粘贴你的秘密</label>
+                    <textarea id="content" placeholder="粘贴代码、密码、私密信息...&#10;&#10;例如：&#10;export DB_PASSWORD='my_super_secret_password_123'" spellcheck="false"></textarea>
+                </div>
+
+                <div class="options-grid">
+                    <div class="option-card">
+                        <label>⏱️ 过期时间</label>
+                        <select id="expiration">
+                            <option value="3600">1 小时后销毁</option>
+                            <option value="86400" selected>24 小时后销毁</option>
+                            <option value="604800">7 天后销毁</option>
+                        </select>
+                    </div>
+                    <div class="option-card">
+                        <label>🔑 密码保护（可选）</label>
+                        <input type="password" id="password" placeholder="设置访问密码...">
+                    </div>
+                </div>
+
+                <div class="checkbox-wrapper">
+                    <input type="checkbox" id="burn" checked>
+                    <div>
+                        <div class="checkbox-label">🔥 阅后即焚</div>
+                        <div class="checkbox-desc">内容在被查看一次后立即永久删除</div>
+                    </div>
+                </div>
+
+                <button class="btn" onclick="createPaste()" style="margin-top: 1.5rem;">
+                    🔒 加密并创建分享链接
+                </button>
+            </div>
+
+            <div id="result" class="card result-area">
+                <h2>✅ 分享链接已生成!</h2>
+                <p class="subtitle">此链接将<span style="color: var(--danger)">阅后即焚</span>，请妥善保管。</p>
+                <div class="link-box" id="link-display"></div>
+                <button class="btn btn-secondary" onclick="copyLink()" style="max-width: 200px; margin: 0 auto;">
+                    📋 复制链接
+                </button>
+                <p class="copy-hint">点击链接即可查看内容，查看后内容将永久消失</p>
+            </div>
+        </div>
+
+        <!-- 查看模式 -->
+        <div id="view-mode" class="view-area">
+            <div class="header">
+                <div class="logo">🔥 <span>SecurePaste</span></div>
+                <p class="subtitle">查看机密内容</p>
+            </div>
+
+            <div id="burned" class="card burned-message">
+                <div class="burned-icon">💨</div>
+                <h2>POOF!</h2>
+                <p>此内容已被阅后即焚，永久删除。</p>
+                <p style="margin-top: 1rem; font-size: 0.85rem; color: #4b5563;">没有人可以再看到它，包括服务器。</p>
+            </div>
+
+            <div id="content-display" class="card">
+                <div class="content-display">
+                    <pre><code id="code-content" class="language-javascript">// 加载中...</code></pre>
+                </div>
+                <div class="meta-info">
+                    <div>
+                        <span class="tag" id="expire-tag">⏱️ 24小时后过期</span>
+                        <span class="tag burn" id="burn-tag">🔥 阅后即焚</span>
+                    </div>
+                    <span id="created-at">创建于: 刚刚</span>
+                </div>
+                <button class="btn btn-secondary" onclick="copyContent()" style="margin-top: 1rem;">
+                    📋 复制内容
+                </button>
+            </div>
+        </div>
+
+        <!-- 密码弹窗 -->
+        <div id="pwd-modal" class="modal-overlay">
+            <div class="modal-content">
+                <h3>🔒 密码保护</h3>
+                <p>此内容受密码保护，请输入密码继续查看。</p>
+                <div class="modal-input">
+                    <input type="password" id="pwd-input" placeholder="输入密码..." autofocus>
+                </div>
+                <button class="btn" onclick="submitPassword()" style="margin-bottom: 0.5rem;">
+                    🔓 解锁查看
+                </button>
+                <p id="pwd-error" style="color: var(--danger); font-size: 0.85rem; display: none;">
+                    ❌ 密码错误，请重试
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 模拟 API ---
+        const API_BASE = '/api/v1'; // 替换为实际后端地址
+
+        // 生成链接
+        function createLink(id) {
+            return `${window.location.origin}/p/${id}`;
+        }
+
+        // 创建 Paste
+        async function createPaste() {
+            const content = document.getElementById('content').value;
+            if (!content.trim()) return alert("内容不能为空!");
+
+            const payload = {
+                content: content,
+                expiration_seconds: parseInt(document.getElementById('expiration').value),
+                password: document.getElementById('password').value || null,
+                burn_after_read: document.getElementById('burn').checked
+            };
+
+            // --- 模拟成功 ---
+            // 实际应调用: const res = await fetch(`${API_BASE}/pastes`, { method: 'POST', body: JSON.stringify(payload) });
+            console.log("POST", payload);
+            
+            // 模拟返回
+            const mockId = crypto.randomUUID();
+            const link = createLink(mockId);
+            
+            document.getElementById('link-display').textContent = link;
+            document.getElementById('result').style.display = 'block';
+            document.querySelector('.btn').disabled = true;
+        }
+
+        // 复制
+        function copyLink() {
+            navigator.clipboard.writeText(document.getElementById('link-display').textContent);
+            alert("✅ 链接已复制到剪贴板!");
+        }
+        function copyContent() {
+            navigator.clipboard.writeText(document.getElementById('code-content').textContent);
+            alert("✅ 内容已复制到剪贴板!");
+        }
+
+        // --- 查看模式 (Demo) ---
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('demo') === '1' || window.location.pathname.includes('/p/')) {
+            document.getElementById('create-mode').style.display = 'none';
+            document.getElementById('view-mode').style.display = 'block';
+            
+            // 模拟需要密码
+            const needsPwd = true;
+            if (needsPwd) {
+                document.getElementById('pwd-modal').style.display = 'flex';
+            } else {
+                showContent();
+            }
+        }
+
+        function submitPassword() {
+            const pwd = document.getElementById('pwd-input').value;
+            if (pwd === 'demo') {
+                document.getElementById('pwd-modal').style.display = 'none';
+                showContent();
+            } else {
+                document.getElementById('pwd-error').style.display = 'block';
+            }
+        }
+
+        function showContent() {
+            const code = `import os
+
+# 🔥 这是一个阅后即焚的秘密
+SECRET_API_KEY = "sk-proj-xxxxxxxxxxxxxxxxxxxxxxx"
+DATABASE_URL = "postgresql://admin:super_secret@db.internal:5432/prod"
+
+# 此内容将在查看后自动销毁
+print("Secret loaded successfully")`;
+            
+            const el = document.getElementById('code-content');
+            el.textContent = code;
+            hljs.highlightElement(el);
+            
+            // 模拟 10 秒后显示"已焚毁"提示
+            setTimeout(() => {
+                alert("🔥 提示：此内容已被标记为阅后即焚，刷新后内容将永久消失。");
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
