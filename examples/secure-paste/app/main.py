@@ -14,15 +14,20 @@ f = Fernet(AES_KEY)
 app = FastAPI(title="SecurePaste", version="1.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
+# Ensure data dir exists
+DATA_DIR = os.getenv("DATA_DIR", "/app/data")
+os.makedirs(DATA_DIR, exist_ok=True)
+DB_PATH = os.path.join(DATA_DIR, "securepaste.db")
+
 def init_db():
-    with sqlite3.connect("securepaste.db") as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         conn.execute("CREATE TABLE IF NOT EXISTS pastes (id TEXT PRIMARY KEY, content BLOB, password_hash TEXT, burn_after_read BOOLEAN, expires_at TEXT)")
 
 init_db()
 
 @contextmanager
 def get_db():
-    conn = sqlite3.connect("securepaste.db"); conn.row_factory = sqlite3.Row
+    conn = sqlite3.connect(DB_PATH); conn.row_factory = sqlite3.Row
     try: yield conn
     finally: conn.close()
 
@@ -31,7 +36,8 @@ class PasteReq(BaseModel):
 
 @app.get("/", response_class=HTMLResponse)
 async def index():
-    with open("static/index.html") as f: return f.read()
+    # Serve from /app/static
+    with open("/app/static/index.html") as f: return f.read()
 
 @app.post("/api/v1/pastes")
 def create(req: PasteReq):

@@ -1,5 +1,3 @@
-
-version: "3"
 services:
   securepaste:
     build: .
@@ -8,5 +6,8 @@ services:
     environment:
       - AES_KEY=${AES_KEY:-}
     volumes:
-      - ./:/app/data # Persist DB
-    working_dir: /app/data
+      - data_vol:/app/data
+    restart: unless-stopped
+
+volumes:
+  data_vol:
