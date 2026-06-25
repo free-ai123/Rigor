@@ -200,6 +200,22 @@ Rigor includes a structured knowledge base for cross-project experience reuse:
 - [ ] Web Dashboard integration
 - [ ] Multi-language SOUL.md support
 
+## Maintenance
+
+### 🧹 Clean Up Completed Tasks
+To keep your kanban list clean, you can **archive** all `done` tasks in one go. This hides them from the default list but keeps them in the database (you can still view them with `--archived`).
+
+```bash
+hermes kanban list --status done | grep -oE 't_[a-f0-9]+' | xargs -I {} hermes kanban archive {}
+```
+
+### 📜 View Archived History
+```bash
+hermes kanban list --archived
+```
+
+---
+
 ## Contributing
 
 Contributions welcome!

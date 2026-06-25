@@ -212,6 +212,22 @@ Rigor 包含结构化知识库，用于跨项目经验复用：
 - [ ] Web Dashboard 集成
 - [ ] 多语言 SOUL.md 支持
 
+## 日常维护
+
+### 🧹 一键清理已完成任务
+为了保持看板列表整洁，你可以**一键归档**所有 `done` 状态的任务。这会让它们从默认列表中隐藏，但数据保留在数据库中（通过 `--archived` 仍可找回）。
+
+```bash
+hermes kanban list --status done | grep -oE 't_[a-f0-9]+' | xargs -I {} hermes kanban archive {}
+```
+
+### 📜 查看历史归档
+```bash
+hermes kanban list --archived
+```
+
+---
+
 ## 贡献
 
 欢迎贡献！
