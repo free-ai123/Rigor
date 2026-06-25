@@ -155,6 +155,24 @@ Cursor is an excellent AI coding assistant that helps **you** write code. But it
 
 Rigor is an **autonomous AI team** — you provide the requirement, the rest is handled.
 
+## Task Management
+
+### ✏️ Modify Task
+After creating a task, you don't need to delete it to make changes:
+*   **Recommended: Add Comment** (Agents auto-read comments in ~60s):
+    ```bash
+    hermes kanban comment <id> "Correction: Sort by Stars only. Change theme to dark blue."
+    ```
+*   **Update Description**:
+    ```bash
+    hermes kanban update <id> --body "New description..."
+    ```
+
+### 🛑 Stop Task
+*   **Block** (Stop immediately): `hermes kanban block <id> "Cancelled"`
+*   **Reset** (Revert to todo): `hermes kanban reset <id>`
+*   **Archive** (Hide from list): `hermes kanban archive <id>`
+
 ## Knowledge Base
 
 Rigor includes a structured knowledge base for cross-project experience reuse:
