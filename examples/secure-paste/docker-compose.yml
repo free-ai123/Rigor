@@ -1,0 +1,12 @@
+
+version: "3"
+services:
+  securepaste:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - AES_KEY=${AES_KEY:-}
+    volumes:
+      - ./:/app/data # Persist DB
+    working_dir: /app/data

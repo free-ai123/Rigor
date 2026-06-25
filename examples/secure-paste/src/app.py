@@ -7,8 +7,9 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Request, Header
+from fastapi import FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel
 import bcrypt
 from cryptography.fernet import Fernet
@@ -31,7 +32,7 @@ class CreatePasteRequest(BaseModel):
     content: str
     password: Optional[str] = None
     burn_after_read: bool = False
-    expiration_seconds: int = 86400  # 24h default
+    expiration_seconds: int = 86400
 
 class CreatePasteResponse(BaseModel):
     id: str
@@ -39,9 +40,22 @@ class CreatePasteResponse(BaseModel):
     expires_at: str
     burn_after_read: bool
 
+class PasteResponse(BaseModel):
+    content: str
+    expires_at: str
+    burn_after_read: bool
+
 # --- In-Memory Store (For Demo) ---
-# In production, this would be a PostgreSQL database
 pastes_db = {}
+
+@app.get("/", response_class=HTMLResponse)
+async def serve_frontend():
+    """Serve the frontend directly from the same port"""
+    try:
+        with open("demo/index.html", "r", encoding="utf-8") as f:
+            return f.read()
+    except FileNotFoundError:
+        return "<h1>Frontend not found. Please run from project root.</h1>"
 
 @app.post("/api/v1/pastes", response_model=CreatePasteResponse, status_code=201)
 def create_paste(req: CreatePasteRequest):
@@ -69,12 +83,12 @@ def create_paste(req: CreatePasteRequest):
 
     return CreatePasteResponse(
         id=paste_id,
-        url=f"https://securepaste.example.com/p/{paste_id}",
+        url=f"/p/{paste_id}",
         expires_at=expires_at.isoformat(),
         burn_after_read=req.burn_after_read
     )
 
-@app.get("/api/v1/pastes/{paste_id}")
+@app.get("/api/v1/pastes/{paste_id}", response_model=PasteResponse)
 def get_paste(paste_id: str, x_paste_password: Optional[str] = Header(None)):
     if paste_id not in pastes_db:
         raise HTTPException(status_code=404, detail="Paste not found")
@@ -96,11 +110,15 @@ def get_paste(paste_id: str, x_paste_password: Optional[str] = Header(None)):
     # 3. Decrypt Content
     content = f.decrypt(paste["content"]).decode()
 
-    # 4. Burn After Read Logic (Atomic Check & Delete)
+    # 4. Burn After Read Logic
     if paste["burn_after_read"]:
-        del pastes_db[paste_id]  # "Burn" it immediately
+        del pastes_db[paste_id]
 
-    return {"content": content}
+    return PasteResponse(
+        content=content,
+        expires_at=paste["expires_at"].isoformat(),
+        burn_after_read=paste["burn_after_read"]
+    )
 
 @app.get("/health")
 def health_check():
