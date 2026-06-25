@@ -9,20 +9,26 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from cryptography.fernet import Fernet
 
-AES_KEY = os.getenv("AES_KEY", Fernet.generate_key())
+# --- Config ---
+# Fix: Docker compose might pass an empty string, check for that
+raw_key = os.getenv("AES_KEY")
+AES_KEY = raw_key if raw_key else Fernet.generate_key()
+if not raw_key:
+    print("⚠️ [SECURITY] AES_KEY not set. Using temporary key. Data will be lost on restart.")
+    
 f = Fernet(AES_KEY)
+
 app = FastAPI(title="SecurePaste", version="1.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# Ensure data dir exists
-DATA_DIR = os.getenv("DATA_DIR", "/app/data")
+# --- DB Setup ---
+DATA_DIR = os.path.join("/app", "data")
 os.makedirs(DATA_DIR, exist_ok=True)
 DB_PATH = os.path.join(DATA_DIR, "securepaste.db")
 
 def init_db():
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute("CREATE TABLE IF NOT EXISTS pastes (id TEXT PRIMARY KEY, content BLOB, password_hash TEXT, burn_after_read BOOLEAN, expires_at TEXT)")
-
 init_db()
 
 @contextmanager
@@ -36,8 +42,9 @@ class PasteReq(BaseModel):
 
 @app.get("/", response_class=HTMLResponse)
 async def index():
-    # Serve from /app/static
-    with open("/app/static/index.html") as f: return f.read()
+    try:
+        with open("/app/static/index.html") as f: return f.read()
+    except: return "Frontend not found"
 
 @app.post("/api/v1/pastes")
 def create(req: PasteReq):
