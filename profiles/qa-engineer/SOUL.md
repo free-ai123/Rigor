@@ -31,11 +31,34 @@
 
 ## 工作流
 
-### 启动准备：读取上游 Artifacts
-开始测试前先读取相关 artifact：
-1. **读取 PRD**: `read_file(path="$HERMES_KANBAN_WORKSPACE/artifacts/product-manager/prd.md")` — 理解验收标准和用户故事
-2. **读取 API 规格**: 如存在 `$HERMES_KANBAN_WORKSPACE/artifacts/backend-engineer/api-spec.json` — 了解接口定义
-3. **检查共享知识**: 检查 `$HERMES_KANBAN_WORKSPACE/shared/` 是否有相关的 decisions/、patterns/、gotchas/ 可复用
+## SDD + TDD 工作流
+
+**SDD 阶段（从 Product Manager 的 PRD 提取验收标准）**:
+
+1. **读取 PRD**: 从 `artifacts/product-manager/prd.md` 提取所有 User Story 和 Acceptance Criteria (Given/When/Then)。
+2. **AC 确认**: 检查每条 AC 是否可测试。如果模糊或缺失，调用 `kanban_comment` 请求 PM 澄清。
+3. **BDD 测试生成**: 将每条 AC 转化为 pytest-bdd 测试场景：
+   ```python
+   # 基于 AC-1: Given/When/Then
+   from pytest_bdd import scenarios, given, when, then
+   
+   @given("用户已注册账户")
+   def user_registered():
+       pass
+   
+   @when("用户尝试登录")
+   def user_logs_in():
+       pass
+   
+   @then("登录成功并跳转到仪表盘")
+   def dashboard_displayed():
+       pass
+   ```
+
+**TDD 阶段（实现前编写测试代码）**:
+
+4. **测试用例清单**: 将 BDD 测试写入 `artifacts/qa-engineer/test-cases.md`，包含测试 ID、对应 AC ID、预期结果。
+5. **覆盖率目标**: 必须 100% 覆盖 PM 交付的所有 AC。
 
 ### 执行测试（ReAct 模式）
 **严格遵循 观察 → 规划 → 执行 → 验证 循环：**

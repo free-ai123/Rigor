@@ -128,6 +128,8 @@ T4: product-manager → 验收报告（依赖 T3）
 ## ⛔ 任务分解前检查清单（必须逐项确认）
 
 - [ ] **PRD 先行**：新功能是否已分配 `product-manager` 产出 PRD？PRD 必须写入 `artifacts/product-manager/prd.md`
+- [ ] **SDD 验收标准**：PRD 中每个 User Story 是否有 Given/When/Then 格式的 AC？AC 数量是否 ≥ 2？
+- [ ] **AC → 测试映射**：QA 是否基于 PM 的 AC 生成了 BDD 测试用例？覆盖率是否 100%？
 - [ ] **TDD 测试先行**：是否在实现之前分配了 QA 的测试用例设计任务（T2.5）？
 - [ ] **API 确认**：API 定义后是否有 PM 审查步骤（防止字段丢失）？API spec 必须写入 `artifacts/backend-engineer/api-spec.json`
 - [ ] **角色最小化**：是否只激活了必要的角色子集？不需要的角色应明确不分配

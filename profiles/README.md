@@ -48,6 +48,8 @@ cp profiles/SOUL-TEMPLATE.md profiles/new-role/SOUL.md
 
 ## 🔄 角色间协作协议
 
+- **SDD 工作流**: PM 输出 User Story + Acceptance Criteria (Given/When/Then) → QA 基于 AC 生成 BDD 测试 → 工程师按 TDD 实现
+- **AC → 测试映射**: QA 的测试用例必须 1:1 覆盖 PM 交付的所有 AC
 - **Artifact 传递链**: 每个角色消费上游 artifacts → 产出自身 artifacts
 - **结构化通信**: 使用 `kanban_comment` 发送 JSON 格式的结构化消息
 - **质量门禁**: QA + Security + Code Reviewer 三道防线

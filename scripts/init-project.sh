@@ -48,7 +48,7 @@ echo ""
 log_info "Creating project workspace..."
 mkdir -p "$WORKSPACE_DIR"/{kanban,artifacts,reports,src,tests}
 
-# 1. Project PRD Template
+# 1. Project PRD Template (SDD Format)
 log_info "Creating Product Requirements Document..."
 cat > "$WORKSPACE_DIR/artifacts/prd.md" << EOF
 # Project: $PROJECT_NAME
@@ -56,10 +56,34 @@ cat > "$WORKSPACE_DIR/artifacts/prd.md" << EOF
 ## Overview
 [Describe the project goal in 1-2 sentences]
 
-## Requirements
-- [Requirement 1]
-- [Requirement 2]
-- [Requirement 3]
+## User Stories
+
+### Story 1: [Feature Name]
+**As a** [user role]
+**I want** [action]
+**So that** [value]
+
+#### Acceptance Criteria
+**AC-1:**
+- Given [precondition]
+- When [user action]
+- Then [expected result]
+
+**AC-2:**
+- Given [precondition]
+- When [user action]
+- Then [expected result]
+
+### Story 2: [Feature Name]
+**As a** [user role]
+**I want** [action]
+**So that** [value]
+
+#### Acceptance Criteria
+**AC-1:**
+- Given [precondition]
+- When [user action]
+- Then [expected result]
 
 ## Technical Constraints
 - [Constraint 1]
