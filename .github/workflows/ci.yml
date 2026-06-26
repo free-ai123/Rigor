@@ -1,149 +1,48 @@
-name: Rigor CI
+name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
   pull_request:
-    branches: [main]
+    branches: [ main ]
 
 jobs:
-  validate:
+  lint-and-test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Validate shell scripts
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install dependencies
         run: |
-          for script in scripts/*.sh; do
-            echo "Checking $script..."
-            bash -n "$script"
-          done
-          echo "✅ All shell scripts pass syntax check"
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
 
-      - name: Validate SOUL.md files
+      - name: Lint with Ruff
         run: |
-          ERRORS=0
-          for role in profiles/*/; do
-            name=$(basename "$role")
-            soul="$role/SOUL.md"
-            config="$role/config.yaml"
+          ruff check src/rigor
+          ruff format --check src/rigor
 
-            # SOUL.md must exist
-            if [ ! -f "$soul" ]; then
-              echo "❌ $name: missing SOUL.md"
-              ERRORS=$((ERRORS+1))
-              continue
-            fi
-
-            # SOUL.md must not be empty
-            if [ ! -s "$soul" ]; then
-              echo "❌ $name: SOUL.md is empty"
-              ERRORS=$((ERRORS+1))
-              continue
-            fi
-
-            # SOUL.md must start with valid YAML frontmatter
-            first_line=$(head -1 "$soul")
-            if [ "$first_line" != "---" ]; then
-              echo "❌ $name: SOUL.md missing YAML frontmatter (first line must be ---)"
-              ERRORS=$((ERRORS+1))
-            fi
-
-            # config.yaml must exist
-            if [ ! -f "$config" ]; then
-              echo "⚠️  $name: missing config.yaml (will use defaults)"
-            fi
-
-            echo "✅ $name: valid"
-          done
-
-          if [ $ERRORS -gt 0 ]; then
-            echo ""
-            echo "❌ $ERRORS validation errors found"
-            exit 1
-          fi
-
-      - name: Validate YAML config files
+      - name: Run tests
         run: |
-          pip install pyyaml -q
-          python3 -c "
-          import yaml, sys, glob
-          errors = 0
-          for f in glob.glob('profiles/*/config.yaml') + glob.glob('knowledge-base/**/*.yaml', recursive=True):
-              try:
-                  with open(f) as fh:
-                      yaml.safe_load(fh)
-                  print(f'✅ {f}: valid YAML')
-              except yaml.YAMLError as e:
-                  print(f'❌ {f}: {e}')
-                  errors += 1
-          if errors > 0:
-              sys.exit(1)
-          print(f'✅ All YAML files valid')
-          "
+          pytest src/rigor -v
 
-      - name: Validate JSON files
-        run: |
-          python3 -c "
-          import json, sys, glob
-          errors = 0
-          for f in glob.glob('knowledge-base/**/*.json', recursive=True) + \
-                   glob.glob('examples/**/dashboard.json', recursive=True):
-              try:
-                  with open(f) as fh:
-                      json.load(fh)
-                  print(f'✅ {f}: valid JSON')
-              except json.JSONDecodeError as e:
-                  print(f'❌ {f}: {e}')
-                  errors += 1
-          if errors > 0:
-              sys.exit(1)
-          print(f'✅ All JSON files valid')
-          "
-
-      - name: Verify core roles count
-        run: |
-          ROLE_COUNT=$(ls -d profiles/*/ 2>/dev/null | wc -l)
-          echo "Found $ROLE_COUNT roles"
-          if [ "$ROLE_COUNT" -lt 12 ]; then
-            echo "❌ Expected at least 12 roles, found $ROLE_COUNT"
-            exit 1
-          fi
-          echo "✅ All 12 core roles present"
-
-      - name: Check script permissions
-        run: |
-          for script in scripts/*.sh; do
-            if [ ! -x "$script" ]; then
-              echo "⚠️  $script is not executable, fixing..."
-              chmod +x "$script"
-            fi
-          done
-
-  docs:
+  docker-build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Check README consistency
+      - name: Build Docker image
         run: |
-          # Verify all README files exist
-          for f in README.md README.zh.md README.ja.md; do
-            if [ ! -f "$f" ]; then
-              echo "⚠️  Missing: $f"
-            else
-              echo "✅ $f exists ($(wc -l < "$f") lines)"
-            fi
-          done
-
-      - name: Verify docs completeness
-        run: |
-          for f in docs/architecture.md docs/quickstart.md docs/troubleshooting.md; do
-            if [ -f "$f" ]; then
-              echo "✅ $f exists"
-            else
-              echo "⚠️  Missing doc: $f"
-            fi
-          done
+          docker build . -t rigor:ci-test
