@@ -2,12 +2,8 @@
 
 from __future__ import annotations
 
-import os
 import re
-import subprocess
-import difflib
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 
 class FileOps:
@@ -34,7 +30,7 @@ class FileOps:
         if not p.is_file():
             raise IsADirectoryError(f"Not a file: {path}")
 
-        with open(p, "r", encoding="utf-8", errors="replace") as f:
+        with open(p, encoding="utf-8", errors="replace") as f:
             lines = f.readlines()
 
         start = max(0, offset - 1)
@@ -53,8 +49,8 @@ class FileOps:
         return f"File written: {path} ({len(content)} bytes)"
 
     def search_files(
-        self, pattern: str, target: str = "content", path: str = ".", file_glob: Optional[str] = None, limit: int = 50
-    ) -> List[str]:
+        self, pattern: str, target: str = "content", path: str = ".", file_glob: str | None = None, limit: int = 50
+    ) -> list[str]:
         """Search file contents or find files by glob."""
         root = self._safe_path(path)
 
@@ -96,10 +92,11 @@ class FileOps:
             lines_old = old_string.strip().split("\n")
             lines_content = content.split("\n")
             for i in range(len(lines_content) - len(lines_old) + 1):
-                block = "\n".join(lines_content[i:i + len(lines_old)])
+                block = "\n".join(lines_content[i : i + len(lines_old)])
                 # Simple similarity check
                 if len(lines_old) > 2:
                     import difflib
+
                     ratio = difflib.SequenceMatcher(None, old_string.strip(), block.strip()).ratio()
                     if ratio > 0.8:
                         old_string = block
@@ -116,7 +113,7 @@ class FileOps:
         p.write_text(new_content, encoding="utf-8")
         return f"Patch applied: {path}"
 
-    def list_dir(self, path: str = ".", max_depth: int = 2) -> List[str]:
+    def list_dir(self, path: str = ".", max_depth: int = 2) -> list[str]:
         """List directory contents."""
         p = self._safe_path(path)
         results = []

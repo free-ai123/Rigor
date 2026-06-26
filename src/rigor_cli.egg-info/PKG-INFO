@@ -1,11 +1,11 @@
-Metadata-Version: 2.1
+Metadata-Version: 2.4
 Name: rigor-cli
 Version: 2.0.0
 Summary: 12-Role AI Engineering Team - CLI and Modules
-Home-page: UNKNOWN
-License: UNKNOWN
-Platform: UNKNOWN
 Requires-Python: >=3.6
-
-UNKNOWN
-
+Requires-Dist: click>=7.0
+Requires-Dist: pyyaml>=5.0
+Requires-Dist: requests>=2.20
+Provides-Extra: dev
+Requires-Dist: pytest>=4.0; extra == "dev"
+Dynamic: requires-python

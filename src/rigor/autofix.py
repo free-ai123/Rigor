@@ -7,17 +7,16 @@ Combines:
 4. Test execution & validation
 5. Task status updates with retry limits
 """
+
 from __future__ import annotations
 
 import asyncio
 import json
 import logging
-import os
 import sqlite3
 import subprocess
 import time
 from pathlib import Path
-from typing import Dict, List
 
 from rigor.core.file_ops import FileOps
 from rigor.core.patch_gen import ErrorParser, PatchGenerator
@@ -33,7 +32,11 @@ logger = logging.getLogger("rigor.autofix")
 class ProjectDetector:
     @staticmethod
     def detect(workspace: Path) -> str:
-        if (workspace / "pyproject.toml").exists() or (workspace / "requirements.txt").exists() or (workspace / "setup.py").exists():
+        if (
+            (workspace / "pyproject.toml").exists()
+            or (workspace / "requirements.txt").exists()
+            or (workspace / "setup.py").exists()
+        ):
             return "python"
         if (workspace / "package.json").exists():
             return "node"
@@ -51,16 +54,19 @@ class AutoFixEngine:
         self.file_ops = FileOps(str(workspace))
         self.patch_gen = PatchGenerator(self.file_ops)
 
-    def run_lint_fix(self) -> Dict:
-        cmds: List[List[str]] = []
+    def run_lint_fix(self) -> dict:
+        cmds: list[list[str]] = []
         if self.project_type == "python":
             cmds = [["ruff", "check", "--fix", "."], ["ruff", "format", "."]]
         elif self.project_type == "node":
-            cmds = [["npx", "eslint", ".", "--fix", "--quiet"], ["npx", "prettier", ".", "--write", "--log-level", "warn"]]
+            cmds = [
+                ["npx", "eslint", ".", "--fix", "--quiet"],
+                ["npx", "prettier", ".", "--write", "--log-level", "warn"],
+            ]
         elif self.project_type == "go":
             cmds = [["go", "fmt", "./..."], ["golangci-lint", "run", "--fix"]]
 
-        logs: List[str] = []
+        logs: list[str] = []
         success = True
         for cmd in cmds:
             try:
@@ -76,8 +82,8 @@ class AutoFixEngine:
 
         return {"success": success, "logs": "\n".join(logs), "actions_taken": ["lint_fix"]}
 
-    def run_tests(self) -> Dict:
-        cmds: List[str] = []
+    def run_tests(self) -> dict:
+        cmds: list[str] = []
         if self.project_type == "python":
             if (self.workspace / "pytest.ini").exists() or (self.workspace / "pyproject.toml").exists():
                 cmds = ["pytest", "--tb=short", "-q", "--last-failed"]
@@ -99,7 +105,7 @@ class AutoFixEngine:
         except Exception as e:
             return {"success": False, "logs": f"Test runner failed: {e}", "actions_taken": []}
 
-    def attempt_patch(self, error_output: str) -> Dict:
+    def attempt_patch(self, error_output: str) -> dict:
         """Parse errors and generate/apply patches."""
         issues = ErrorParser.parse(error_output)
         if not issues:
@@ -117,8 +123,12 @@ class AutoFixEngine:
                     if patch.startswith("import ") or patch.startswith("from "):
                         # Insert import at top of file
                         lines = current_content.split("\n")
-                        for i, l in enumerate(lines):
-                            if l.startswith("import ") or l.startswith("from ") or (l.startswith("#") and i < 5):
+                        for i, line in enumerate(lines):
+                            if (
+                                line.startswith("import ")
+                                or line.startswith("from ")
+                                or (line.startswith("#") and i < 5)
+                            ):
                                 continue
                             lines.insert(i, patch)
                             break
@@ -135,7 +145,9 @@ class AutoFixEngine:
 
 
 class AutoFixWorker:
-    def __init__(self, db_path: str, workspace: str, poll_interval: int = 15, max_retries: int = 3, dry_run: bool = False):
+    def __init__(
+        self, db_path: str, workspace: str, poll_interval: int = 15, max_retries: int = 3, dry_run: bool = False
+    ):
         self.db_path = db_path
         self.workspace = Path(workspace).resolve()
         self.poll_interval = poll_interval
@@ -149,15 +161,15 @@ class AutoFixWorker:
         conn.row_factory = sqlite3.Row
         return conn
 
-    def _fetch_pending_tasks(self) -> List[dict]:
+    def _fetch_pending_tasks(self) -> list[dict]:
         if not Path(self.db_path).exists():
             return []
         conn = self._get_db()
         try:
             cur = conn.execute(
-                """SELECT id, title, description, metadata, retry_count 
-                   FROM tasks 
-                   WHERE status IN ('todo', 'blocked') 
+                """SELECT id, title, description, metadata, retry_count
+                   FROM tasks
+                   WHERE status IN ('todo', 'blocked')
                    AND (tags LIKE '%auto-fix%' OR tags LIKE '%self-heal%')
                    AND (retry_count IS NULL OR retry_count < ?)
                    ORDER BY created_at ASC""",
@@ -183,7 +195,9 @@ class AutoFixWorker:
 
     async def run(self):
         self.running = True
-        logger.info(f"🤖 AutoFix worker started. DB: {self.db_path} | WS: {self.workspace} | Poll: {self.poll_interval}s")
+        logger.info(
+            f"🤖 AutoFix worker started. DB: {self.db_path} | WS: {self.workspace} | Poll: {self.poll_interval}s"
+        )
         while self.running:
             try:
                 tasks = self._fetch_pending_tasks()
@@ -224,7 +238,9 @@ class AutoFixWorker:
         logger.info("  🧪 Running tests...")
         test_res = self.engine.run_tests()
 
-        all_logs = (patch_res.get("logs", "") + "\n" + lint_res.get("logs", "") + "\n" + test_res.get("logs", "")).strip()
+        all_logs = (
+            patch_res.get("logs", "") + "\n" + lint_res.get("logs", "") + "\n" + test_res.get("logs", "")
+        ).strip()
 
         if test_res.get("success", True):
             logger.info(f"  ✅ Task {task_id} fixed successfully.")

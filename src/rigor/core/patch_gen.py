@@ -2,11 +2,10 @@
 
 Uses deterministic rules + LLM templates to create targeted patches.
 """
+
 from __future__ import annotations
 
 import re
-from pathlib import Path
-from typing import List, Dict, Optional
 
 
 class ErrorParser:
@@ -14,12 +13,12 @@ class ErrorParser:
 
     PATTERNS = [
         re.compile(r"(.*?):(\d+):\d+:\s*(.*(?:\n.*?){0,2})"),  # ruff/eslint
-        re.compile(r"File \"(.*?)\", line (\d+)(.*)"),         # python traceback
-        re.compile(r"FAILED (.*?::)(.*?)(?: - (.+))?"),        # pytest
+        re.compile(r"File \"(.*?)\", line (\d+)(.*)"),  # python traceback
+        re.compile(r"FAILED (.*?)::(\w+)(?:\s*-\s*(.+))?"),  # pytest
     ]
 
     @classmethod
-    def parse(cls, error_output: str) -> List[Dict]:
+    def parse(cls, error_output: str) -> list[dict]:
         """Extract file error locations and descriptions."""
         issues = []
         for line in error_output.split("\n"):
@@ -27,7 +26,7 @@ class ErrorParser:
             if not line:
                 continue
 
-            for pattern in cls.PATTERNS:
+            for pattern_idx, pattern in enumerate(cls.PATTERNS):
                 match = pattern.search(line)
                 if match:
                     groups = match.groups()
@@ -35,16 +34,20 @@ class ErrorParser:
                     try:
                         lineno = int(groups[1])
                     except ValueError:
-                        continue
+                        # For pytest, groups[1] is the function name, not line number
+                        lineno = 0
+
                     msg = groups[2].strip() if len(groups) > 2 else ""
-                    
+
                     if any(filepath.endswith(ext) for ext in (".py", ".js", ".ts", ".go", ".rs", ".java")):
-                        issues.append({
-                            "file": filepath,
-                            "line": lineno,
-                            "message": msg,
-                            "raw_line": line,
-                        })
+                        issues.append(
+                            {
+                                "file": filepath,
+                                "line": lineno,
+                                "message": msg,
+                                "raw_line": line,
+                            }
+                        )
                     break
         return issues
 
@@ -55,7 +58,7 @@ class PatchGenerator:
     def __init__(self, file_ops):
         self.file_ops = file_ops
 
-    def generate_patch(self, filepath: str, line: int, error_msg: str) -> Optional[str]:
+    def generate_patch(self, filepath: str, line: int, error_msg: str) -> str | None:
         """Generate a patch for a specific error."""
         # 1. Deterministic fixes
         det_patch = self._deterministic_fix(filepath, line, error_msg)
@@ -65,7 +68,7 @@ class PatchGenerator:
         # 2. LLM-based fix (requires external API)
         return self._llm_generate_patch(filepath, line, error_msg)
 
-    def _deterministic_fix(self, filepath: str, line: int, error_msg: str) -> Optional[str]:
+    def _deterministic_fix(self, filepath: str, line: int, error_msg: str) -> str | None:
         """Apply rule-based fixes for common errors."""
         error_lower = error_msg.lower()
 
@@ -74,10 +77,14 @@ class PatchGenerator:
         if name_match:
             name = name_match.group(1)
             common_imports = {
-                "os": "import os", "json": "import json", "re": "import re",
-                "Path": "from pathlib import Path", "datetime": "from datetime import datetime",
+                "os": "import os",
+                "json": "import json",
+                "re": "import re",
+                "Path": "from pathlib import Path",
+                "datetime": "from datetime import datetime",
                 "typing": "from typing import List, Dict, Optional",
-                "subprocess": "import subprocess", "asyncio": "import asyncio",
+                "subprocess": "import subprocess",
+                "asyncio": "import asyncio",
             }
             if name in common_imports:
                 return common_imports[name]
@@ -88,10 +95,10 @@ class PatchGenerator:
 
         return None
 
-    def _llm_generate_patch(self, filepath: str, line: int, error_msg: str) -> Optional[str]:
+    def _llm_generate_patch(self, filepath: str, line: int, error_msg: str) -> str | None:
         """
         Placeholder for LLM-based patch generation.
-        
+
         To implement:
         1. Read context around the error line.
         2. Construct prompt: "Fix the error in this code: ..."

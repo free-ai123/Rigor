@@ -1,10 +1,11 @@
 """CI/CD Webhook Listener for Rigor."""
 
-import json
 import http.server
+import json
 import socketserver
 import threading
-from typing import Callable, Dict, Any
+from typing import Any, Callable
+
 from rich.console import Console
 
 console = Console()
@@ -12,22 +13,23 @@ console = Console()
 
 class WebhookHandler(http.server.BaseHTTPRequestHandler):
     """Handles incoming CI/CD webhooks."""
-    callback: Callable[[str, Dict[str, Any]], None] = None
+
+    callback: Callable[[str, dict[str, Any]], None] = None
 
     def do_POST(self):
-        content_length = int(self.headers['Content-Length'])
+        content_length = int(self.headers["Content-Length"])
         post_data = self.rfile.read(content_length)
-        
+
         try:
-            payload = json.loads(post_data.decode('utf-8'))
+            payload = json.loads(post_data.decode("utf-8"))
             # Determine platform based on headers
-            platform = self.headers.get('X-GitHub-Event', 'gitlab')
-            if platform != 'gitlab':
-                platform = 'github'
-                
+            platform = self.headers.get("X-GitHub-Event", "gitlab")
+            if platform != "gitlab":
+                platform = "github"
+
             if self.callback:
                 self.callback(platform, payload)
-                
+
             self.send_response(200)
             self.end_headers()
             self.wfile.write(b'{"status": "received"}')
@@ -43,29 +45,29 @@ class WebhookHandler(http.server.BaseHTTPRequestHandler):
 
 class CIWebhookManager:
     """Manages the lifecycle of the webhook server."""
-    
+
     def __init__(self, port: int = 9999):
         self.port = port
         self.server = None
         self.thread = None
-        
-    def start(self, callback: Callable[[str, Dict[str, Any]], None]):
+
+    def start(self, callback: Callable[[str, dict[str, Any]], None]):
         """Start webhook server in background thread."""
         WebhookHandler.callback = callback
-        
+
         with socketserver.TCPServer(("", self.port), WebhookHandler) as self.server:
             self.thread = threading.Thread(target=self.server.serve_forever)
             self.thread.daemon = True
             self.thread.start()
             console.print(f"[green]🔌 CI Webhook listener started on port {self.port}[/]")
-            
+
     def stop(self):
         if self.server:
             self.server.shutdown()
             console.print("[yellow]Webhook listener stopped[/]")
 
 
-def parse_github_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+def parse_github_payload(payload: dict[str, Any]) -> dict[str, Any]:
     """Parse GitHub Check Run or Status payload."""
     result = {
         "platform": "github",
@@ -78,7 +80,7 @@ def parse_github_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     return result
 
 
-def parse_gitlab_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+def parse_gitlab_payload(payload: dict[str, Any]) -> dict[str, Any]:
     """Parse GitLab Pipeline payload."""
     result = {
         "platform": "gitlab",

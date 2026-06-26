@@ -1,9 +1,9 @@
 """依赖安全扫描 — 支持 Python/Node.js/Go/Rust 多语言"""
 
-import os
-import subprocess
 import json
-from typing import Dict, List, Any, Optional
+import os
+from typing import Any
+
 from rich.console import Console
 from rich.table import Table
 
@@ -30,17 +30,17 @@ KNOWN_VULNERABILITIES = {
 }
 
 
-def scan_python_deps(project_dir: str = ".") -> List[Dict[str, Any]]:
+def scan_python_deps(project_dir: str = ".") -> list[dict[str, Any]]:
     """扫描 Python 依赖"""
     issues = []
-    
+
     # 解析 requirements.txt / pyproject.toml
     req_files = []
     for f in ["requirements.txt", "requirements/dev.txt", "requirements/prod.txt"]:
         path = os.path.join(project_dir, f)
         if os.path.exists(path):
             req_files.append(path)
-    
+
     for req_file in req_files:
         with open(req_file) as fh:
             for line in fh:
@@ -57,7 +57,7 @@ def scan_python_deps(project_dir: str = ".") -> List[Dict[str, Any]]:
                     version = "unknown"
                 else:
                     continue
-                
+
                 # 检查已知漏洞
                 vuln_db = KNOWN_VULNERABILITIES.get("python", {})
                 if pkg in vuln_db:
@@ -66,79 +66,84 @@ def scan_python_deps(project_dir: str = ".") -> List[Dict[str, Any]]:
                         min_ver = ver_range.lstrip("<")
                         if _version_lt(version, min_ver):
                             for cve in cves:
-                                issues.append({
-                                    "language": "python",
-                                    "package": pkg,
-                                    "current_version": version,
-                                    "min_safe_version": min_ver,
-                                    "vulnerability": cve,
-                                    "severity": "high",
-                                    "source": req_file,
-                                })
-    
+                                issues.append(
+                                    {
+                                        "language": "python",
+                                        "package": pkg,
+                                        "current_version": version,
+                                        "min_safe_version": min_ver,
+                                        "vulnerability": cve,
+                                        "severity": "high",
+                                        "source": req_file,
+                                    }
+                                )
+
     return issues
 
 
-def scan_nodejs_deps(project_dir: str = ".") -> List[Dict[str, Any]]:
+def scan_nodejs_deps(project_dir: str = ".") -> list[dict[str, Any]]:
     """扫描 Node.js 依赖"""
     issues = []
     pkg_json = os.path.join(project_dir, "package.json")
-    
+
     if not os.path.exists(pkg_json):
         return issues
-    
+
     with open(pkg_json) as fh:
         data = json.load(fh)
-    
+
     all_deps = {}
     all_deps.update(data.get("dependencies", {}))
     all_deps.update(data.get("devDependencies", {}))
-    
+
     vuln_db = KNOWN_VULNERABILITIES.get("nodejs", {})
     for pkg, version in all_deps.items():
         pkg = pkg.lower()
         # 清理版本前缀 (^, ~, >=)
         clean_ver = version.lstrip("^~>=< ")
-        
+
         if pkg in vuln_db:
             for ver_range, cves in vuln_db[pkg].items():
                 min_ver = ver_range.lstrip("<")
                 if _version_lt(clean_ver, min_ver):
                     for cve in cves:
-                        issues.append({
-                            "language": "nodejs",
-                            "package": pkg,
-                            "current_version": clean_ver,
-                            "min_safe_version": min_ver,
-                            "vulnerability": cve,
-                            "severity": "high",
-                            "source": "package.json",
-                        })
-    
+                        issues.append(
+                            {
+                                "language": "nodejs",
+                                "package": pkg,
+                                "current_version": clean_ver,
+                                "min_safe_version": min_ver,
+                                "vulnerability": cve,
+                                "severity": "high",
+                                "source": "package.json",
+                            }
+                        )
+
     return issues
 
 
 def _version_lt(v1: str, v2: str) -> bool:
     """简化的版本比较：v1 < v2"""
     try:
+
         def normalize(v):
             return [int(x) for x in v.split(".")[:3]]
-        
+
         parts1 = normalize(v1)
         parts2 = normalize(v2)
-        
+
         # 补齐长度
         while len(parts1) < 3:
             parts1.append(0)
         while len(parts2) < 3:
             parts2.append(0)
-        
+
         return parts1 < parts2
     except Exception:
         return False
 
 
-def scan_project(project_dir: str = ".") -> List[Dict[str, Any]]:
+def scan_project(project_dir: str = ".") -> list[dict[str, Any]]:
     """扫描项目所有支持的依赖"""
     all_issues = []
     all_issues.extend(scan_python_deps(project_dir))
@@ -146,14 +151,14 @@ def scan_project(project_dir: str = ".") -> List[Dict[str, Any]]:
     return all_issues
 
 
-def display_scan_results(issues: List[Dict[str, Any]]) -> None:
+def display_scan_results(issues: list[dict[str, Any]]) -> None:
     """以表格形式展示扫描结果"""
     if not issues:
         console.print("\n[green]✅ 未发现已知依赖漏洞![/]\n")
         return
-    
+
     console.print(f"\n[bold red]⚠️  发现 {len(issues)} 个已知漏洞![/]\n")
-    
+
     table = Table(title="依赖安全扫描结果")
     table.add_column("语言", style="cyan")
     table.add_column("包名", style="yellow")
@@ -161,7 +166,7 @@ def display_scan_results(issues: List[Dict[str, Any]]) -> None:
     table.add_column("安全版本", style="green")
     table.add_column("漏洞", style="red")
     table.add_column("来源")
-    
+
     for issue in issues:
         table.add_row(
             issue["language"],
@@ -171,11 +176,11 @@ def display_scan_results(issues: List[Dict[str, Any]]) -> None:
             issue["vulnerability"],
             issue["source"],
         )
-    
+
     console.print(table)
-    
+
     # 修复建议
-    console.print(f"\n[bold]💡 修复建议:[/]")
+    console.print("\n[bold]💡 修复建议:[/]")
     for issue in issues:
         lang_cmd = {
             "python": f"pip install '{issue['package']}>={issue['min_safe_version']}'",

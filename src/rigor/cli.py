@@ -1,12 +1,11 @@
 """Rigor CLI v2.0 — 统一入口"""
 
-import click
-import sys
 import os
-from typing import Dict, Any
+import sys
+from typing import Any
+
+import click
 from rich.console import Console
-from rich.panel import Panel
-from rich.table import Table
 from rich.markdown import Markdown
 
 console = Console()
@@ -26,6 +25,7 @@ def main():
 
 # ===================== 安装/状态 =====================
 
+
 @main.command()
 @click.option("--platform", type=click.Choice(["github", "gitlab"]), default=None, help="Git 平台")
 def install(platform):
@@ -42,16 +42,19 @@ def install(platform):
 def status():
     """系统健康状态"""
     from rigor.modules.monitor import run_status
+
     run_status()
 
 
 # ===================== 监控 =====================
+
 
 @main.command()
 def monitor():
     """实时监控面板（文本模式）"""
     try:
         from rigor.modules.monitor import run_dashboard
+
         run_dashboard()
     except KeyboardInterrupt:
         console.print("\n[yellow]监控已退出[/]")
@@ -61,6 +64,7 @@ def monitor():
 def cost():
     """成本报告"""
     from rigor.modules.monitor import run_cost_report
+
     run_cost_report()
 
 
@@ -69,10 +73,12 @@ def cost():
 def budget(amount):
     """设置/查看预算"""
     from rigor.modules.monitor import manage_budget
+
     manage_budget(amount)
 
 
 # ===================== PR 管理 (P0-1) =====================
+
 
 @main.group()
 def pr():
@@ -90,6 +96,7 @@ def pr():
 def pr_create(repo, branch, base, token, platform, no_review):
     """自动创建 PR 并添加 AI Review"""
     from rigor.modules.pr import create_pr
+
     result = create_pr(
         repo_url=repo,
         branch=branch,
@@ -102,7 +109,7 @@ def pr_create(repo, branch, base, token, platform, no_review):
         console.print(f"\n[green]✅ PR #{result['pr_number']} 已创建![/]")
         console.print(f"  URL: {result['pr_url']}")
         if result.get("review_added"):
-            console.print(f"  🤖 自动 Review: 已添加")
+            console.print("  🤖 自动 Review: 已添加")
     elif result["status"] == "skipped":
         console.print(f"[yellow]⏭️  跳过: {result.get('reason')}[/]")
     else:
@@ -116,46 +123,48 @@ def pr_create(repo, branch, base, token, platform, no_review):
 @click.option("--platform", type=click.Choice(["github", "gitlab"]), default=None)
 def pr_review(repo, pr, token, platform):
     """对已有 PR 添加 AI Review"""
-    from rigor.git.factory import create_platform, get_repo_name_from_url
+    from rigor.git.factory import create_platform
     from rigor.modules.pr import _generate_review
-    
+
     platform_client = create_platform(platform_type=platform, token=token)
-    
+
     # 获取 PR 信息
     pr_data = platform_client.get_pr(repo, pr)
     source = pr_data.get("head", {}).get("ref", "unknown")
-    
+
     review = _generate_review(platform_client, repo, pr, source, "main")
-    result = platform_client.add_pr_review(repo, pr, review, "COMMENT")
-    
+    platform_client.add_pr_review(repo, pr, review, "COMMENT")
+
     console.print(f"[green]✅ Review 评论已添加到 #{pr}[/]")
 
 
 # ===================== 安全扫描 (P0-2) =====================
+
 
 @main.command(name="scan")
 @click.option("--dir", "-d", default=".", help="项目目录")
 @click.option("--language", type=click.Choice(["python", "nodejs", "all"]), default="all")
 def scan(dir, language):
     """依赖安全扫描"""
-    from rigor.modules.security import scan_project, scan_python_deps, scan_nodejs_deps, display_scan_results
-    
+    from rigor.modules.security import display_scan_results, scan_nodejs_deps, scan_project, scan_python_deps
+
     console.print("[cyan]🔍 正在扫描依赖...[/]")
-    
+
     if language == "python":
         issues = scan_python_deps(dir)
     elif language == "nodejs":
         issues = scan_nodejs_deps(dir)
     else:
         issues = scan_project(dir)
-    
+
     display_scan_results(issues)
-    
+
     if issues:
         sys.exit(1)  # CI 场景：有漏洞时返回非零退出码
 
 
 # ===================== Mock 生成 (P0-3) =====================
+
 
 @main.command(name="mock")
 @click.argument("spec", required=True)
@@ -164,10 +173,12 @@ def scan(dir, language):
 def mock(spec, output, framework):
     """根据 API spec 生成 Mock Server"""
     from rigor.modules.mock import generate_mock_server
+
     generate_mock_server(spec, output, framework)
 
 
 # ===================== 报告生成 (P0-4) =====================
+
 
 @main.group()
 def report():
@@ -182,10 +193,10 @@ def report():
 def report_daily(dir, author, save):
     """生成日报"""
     from rigor.modules.reports import generate_daily_report, save_report
-    
+
     report = generate_daily_report(dir, author)
     console.print(Markdown(report))
-    
+
     if save:
         path = save_report(report, project_dir=dir)
         console.print(f"\n[green]💾 已保存: {path}[/]")
@@ -198,16 +209,17 @@ def report_daily(dir, author, save):
 def report_weekly(dir, author, save):
     """生成周报"""
     from rigor.modules.reports import generate_weekly_report, save_report
-    
+
     report = generate_weekly_report(dir, author)
     console.print(Markdown(report))
-    
+
     if save:
         path = save_report(report, project_dir=dir)
         console.print(f"\n[green]💾 已保存: {path}[/]")
 
 
 # ===================== 项目脚手架 =====================
+
 
 @main.command(name="init")
 @click.argument("project_name")
@@ -225,6 +237,7 @@ def tui():
     """启动实时 TUI 仪表盘 (k9s 风格)"""
     try:
         from rigor.tui.app import RigorTUIApp
+
         app = RigorTUIApp()
         app.run()
     except ImportError as e:
@@ -234,26 +247,28 @@ def tui():
 
 # ===================== CI/CD Webhook =====================
 
+
 @main.command(name="setup")
 @click.option("--dir", "-d", default=".", help="Project directory")
 def setup(dir):
     """Run the 5-layer autonomous environment setup (Deps, System, Env, DB, Service)"""
     from rigor.modules.terminal import AgentTerminal
-    
+
     console.print("[bold cyan]🤖 Starting Rigor Autonomous Environment Setup...[/]")
-    
+
     term = AgentTerminal(workdir=dir)
     results = term.setup_environment()
-    
+
     for r in results:
-        layer_name = r['layer']
-        res = r['result']
-        if res.get('success'):
+        layer_name = r["layer"]
+        res = r["result"]
+        if res.get("success"):
             console.print(f"[green]✅ [{layer_name}][/green] {res.get('message', 'OK')}")
         else:
             console.print(f"[red]❌ [{layer_name}][/red] {res.get('error', 'Failed')}")
-            if res.get('suggestion'):
+            if res.get("suggestion"):
                 console.print(f"[yellow]   💡 Suggestion: {res['suggestion']}[/yellow]")
+
 
 @main.command(name="knowledge")
 @click.option("--vault", "-v", default=None, help="Obsidian Vault 路径")
@@ -261,9 +276,9 @@ def setup(dir):
 def knowledge(query, vault):
     """管理知识库 (索引 / 全文搜索)"""
     from rigor.modules.knowledge import KnowledgeEngine
-    
+
     engine = KnowledgeEngine(vault_path=vault)
-    
+
     if query:
         # Search mode
         console.print(f"[cyan]🔍 正在搜索: '{query}'[/]")
@@ -273,20 +288,20 @@ def knowledge(query, vault):
         else:
             console.print(f"[green]✅ 找到 {len(results)} 条结果:[/]")
             for i, r in enumerate(results):
-                console.print(f"\n[bold]{i+1}. {r['title']}[/] ({r['category']})")
+                console.print(f"\n[bold]{i + 1}. {r['title']}[/] ({r['category']})")
                 console.print(f"   路径: {r['path']}")
                 console.print(f"   预览: {r['content_preview']}")
     else:
         # Index & Stats mode
         console.print("[cyan]📚 正在索引知识库...[/]")
         stats = engine.get_stats()
-        if stats.get('total_documents', 0) == 0:
-            result = engine.index_vault()
+        if stats.get("total_documents", 0) == 0:
+            engine.index_vault()
             stats = engine.get_stats()
-        console.print(f"[green]✅ 知识库状态:[/]")
+        console.print("[green]✅ 知识库状态:[/]")
         console.print(f"   总文档: {stats.get('total_documents', 0)}")
         console.print(f"   索引路径: {stats.get('db_path', 'N/A')}")
-    
+
     engine.close()
 
 
@@ -299,7 +314,10 @@ def knowledge(query, vault):
 def watch_fix(db, workspace, interval, max_retries, dry_run):
     """启动 Auto-Fix 后台守护进程 (自修复循环)"""
     from rigor.autofix import watch_fix as _watch_fix
-    _watch_fix(standalone_mode=False, db=db, workspace=workspace, interval=interval, max_retries=max_retries, dry_run=dry_run)
+
+    _watch_fix(
+        standalone_mode=False, db=db, workspace=workspace, interval=interval, max_retries=max_retries, dry_run=dry_run
+    )
 
 
 @main.command(name="webhook")
@@ -309,7 +327,7 @@ def webhook(port, ci_platform):
     """启动 CI/CD Webhook 监听服务"""
     from rigor.modules.webhook import CIWebhookManager, parse_github_payload, parse_gitlab_payload
 
-    def handle_ci_event(platform: str, payload: Dict[str, Any]):
+    def handle_ci_event(platform: str, payload: dict[str, Any]):
         """处理 CI 事件回调"""
         if platform == "github":
             event = parse_github_payload(payload)
@@ -325,10 +343,11 @@ def webhook(port, ci_platform):
             f"分支: {event['ref']}"
         )
         console.print(f"  URL: {event.get('url', 'N/A')}")
-        
+
         # Auto-Fix: 当 CI 失败时自动创建修复任务
         if event.get("status") not in ("success", "passed"):
             from rigor.modules.autofix import AutoFixEngine
+
             autofix = AutoFixEngine()
             error_detail = event.get("name", "Unknown CI error")
             result = autofix.create_fix_task_from_ci(
@@ -343,10 +362,11 @@ def webhook(port, ci_platform):
 
     manager = CIWebhookManager(port=port)
     manager.start(handle_ci_event)
-    
-    console.print(f"[dim]按 Ctrl+C 停止服务[/]")
+
+    console.print("[dim]按 Ctrl+C 停止服务[/]")
     try:
         import time
+
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
