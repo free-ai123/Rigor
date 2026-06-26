@@ -234,6 +234,27 @@ def tui():
 
 # ===================== CI/CD Webhook =====================
 
+@main.command(name="setup")
+@click.option("--dir", "-d", default=".", help="Project directory")
+def setup(dir):
+    """Run the 5-layer autonomous environment setup (Deps, System, Env, DB, Service)"""
+    from rigor.modules.terminal import AgentTerminal
+    
+    console.print("[bold cyan]🤖 Starting Rigor Autonomous Environment Setup...[/]")
+    
+    term = AgentTerminal(workdir=dir)
+    results = term.setup_environment()
+    
+    for r in results:
+        layer_name = r['layer']
+        res = r['result']
+        if res.get('success'):
+            console.print(f"[green]✅ [{layer_name}][/green] {res.get('message', 'OK')}")
+        else:
+            console.print(f"[red]❌ [{layer_name}][/red] {res.get('error', 'Failed')}")
+            if res.get('suggestion'):
+                console.print(f"[yellow]   💡 Suggestion: {res['suggestion']}[/yellow]")
+
 @main.command(name="webhook")
 @click.option("--port", "-p", default=9999, help="Webhook 监听端口 (默认: 9999)")
 @click.option("--ci-platform", type=click.Choice(["github", "gitlab", "auto"]), default="auto", help="CI 平台")

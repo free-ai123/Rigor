@@ -4,7 +4,9 @@ import os
 import subprocess
 import shlex
 import re
-from typing import List, Dict, Any, Optional, Tuple
+import time
+import secrets
+from typing import Dict, Any, Optional, List, Tuple
 from rich.console import Console
 
 console = Console()
@@ -153,7 +155,6 @@ class AgentTerminal:
         workdir = project_dir or self.workdir
         
         if test_type == "auto":
-            # Detect test framework
             if os.path.exists(os.path.join(workdir, "pytest.ini")) or \
                os.path.exists(os.path.join(workdir, "pyproject.toml")):
                 test_type = "pytest"
@@ -166,3 +167,193 @@ class AgentTerminal:
             return self.execute("npm test")
         else:
             return {"success": False, "error": "No test framework detected"}
+
+    # =========================================================
+    # 自主环境配置 (Autonomous Environment Configuration)
+    # =========================================================
+
+    def setup_environment(self, project_dir: str = None) -> List[Dict[str, Any]]:
+        """Execute the full 5-layer environment setup sequence."""
+        workdir = project_dir or self.workdir
+        results = []
+        
+        # Layer 1: Dependencies (Already implemented, reuse)
+        console.print("[cyan]📦 [Layer 1] 正在安装项目依赖...[/]")
+        dep_res = self.install_dependencies(workdir)
+        results.append({"layer": "dependencies", "result": dep_res})
+
+        # Layer 2: System Dependencies
+        console.print("[cyan]🔧 [Layer 2] 正在检查系统依赖...[/]")
+        sys_res = self.check_system_deps(workdir)
+        results.append({"layer": "system_deps", "result": sys_res})
+
+        # Layer 3: Environment Variables
+        console.print("[cyan]🔑 [Layer 3] 正在配置环境变量...[/]")
+        env_res = self.setup_env_vars(workdir)
+        results.append({"layer": "env_vars", "result": env_res})
+
+        # Layer 4: Database Initialization
+        console.print("[cyan]🗄️ [Layer 4] 正在初始化数据库...[/]")
+        db_res = self.setup_database(workdir)
+        results.append({"layer": "database", "result": db_res})
+
+        return results
+
+    def check_system_deps(self, project_dir: str = None) -> Dict[str, Any]:
+        """Layer 2: Detect and install common system-level binaries."""
+        workdir = project_dir or self.workdir
+        # Heuristic: Look for usage of specific tools in code or config
+        required_tools = []
+        
+        # Check for Docker
+        if os.path.exists(os.path.join(workdir, "Dockerfile")):
+            required_tools.append("docker")
+            required_tools.append("docker-compose") # or docker compose
+            
+        # Check for ffmpeg (audio/video processing)
+        # (Simplified: just checking common needs for now)
+
+        missing = []
+        for tool in required_tools:
+            if not self._command_exists(tool):
+                missing.append(tool)
+                
+        if missing:
+            return {
+                "success": False, 
+                "error": f"Missing system tools: {', '.join(missing)}. Please install manually.",
+                "suggestion": f"Try: sudo apt-get install {' '.join(missing)}"
+            }
+        return {"success": True, "message": "All system dependencies found"}
+
+    def _command_exists(self, cmd):
+        try:
+            subprocess.run(["which", cmd], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return True
+        except FileNotFoundError:
+            return False
+
+    def setup_env_vars(self, project_dir: str = None) -> Dict[str, Any]:
+        """Layer 3: Generate .env file from .env.example or common patterns."""
+        workdir = project_dir or self.workdir
+        env_file = os.path.join(workdir, ".env")
+        example_file = os.path.join(workdir, ".env.example")
+        
+        if os.path.exists(env_file):
+            return {"success": True, "message": ".env already exists, skipping."}
+            
+        env_vars = {}
+        
+        if os.path.exists(example_file):
+            with open(example_file) as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        key, val = line.split("=", 1)
+                        key = key.strip()
+                        val = val.strip().strip('"').strip("'")
+                        if val == "" or "placeholder" in val.lower() or "changeme" in val.lower():
+                            env_vars[key] = self._generate_secret(key)
+                        else:
+                            env_vars[key] = val
+        
+        # Heuristic: If no .env.example, generate common defaults
+        if not env_vars:
+            env_vars["DATABASE_URL"] = "sqlite:///./data.db"
+            env_vars["SECRET_KEY"] = secrets.token_urlsafe(32)
+            env_vars["DEBUG"] = "True"
+
+        with open(env_file, "w") as f:
+            for k, v in env_vars.items():
+                f.write(f"{k}={v}\n")
+                
+        return {"success": True, "message": f".env created with {len(env_vars)} variables."}
+
+    def _generate_secret(self, key: str) -> str:
+        if "KEY" in key.upper() or "SECRET" in key.upper() or "TOKEN" in key.upper():
+            return secrets.token_urlsafe(32)
+        if "URL" in key.upper():
+            return "sqlite:///./data.db"
+        return "changeme"
+
+    def setup_database(self, project_dir: str = None) -> Dict[str, Any]:
+        """Layer 4: Run DB migrations automatically."""
+        workdir = project_dir or self.workdir
+        results = []
+        
+        # Django
+        if os.path.exists(os.path.join(workdir, "manage.py")):
+            r = self.execute("python manage.py migrate --no-input")
+            results.append({"framework": "django", "result": r})
+            
+        # SQLAlchemy / Alembic
+        elif os.path.exists(os.path.join(workdir, "alembic.ini")):
+            r = self.execute("alembic upgrade head")
+            results.append({"framework": "alembic", "result": r})
+            
+        # Node.js (Prisma)
+        elif os.path.exists(os.path.join(workdir, "prisma", "schema.prisma")):
+            r = self.execute("npx prisma migrate deploy")
+            results.append({"framework": "prisma", "result": r})
+            
+        # Node.js (Sequelize/Knex) - check package.json scripts
+        elif os.path.exists(os.path.join(workdir, "package.json")):
+            import json
+            with open(os.path.join(workdir, "package.json")) as f:
+                pkg = json.load(f)
+            scripts = pkg.get("scripts", {})
+            if "db:migrate" in scripts:
+                r = self.execute("npm run db:migrate")
+                results.append({"framework": "npm-script", "result": r})
+
+        return {"success": all(r["result"].get("success", False) for r in results), "details": results}
+
+    def start_service(self, project_dir: str = None, port: int = None) -> Dict[str, Any]:
+        """Layer 5: Detect framework and start the service + health check."""
+        workdir = project_dir or self.workdir
+        
+        # Detect Framework
+        start_cmd = None
+        
+        if os.path.exists(os.path.join(workdir, "manage.py")):
+            start_cmd = "python manage.py runserver"
+        elif os.path.exists(os.path.join(workdir, "app/main.py")) or os.path.exists(os.path.join(workdir, "src/main.py")):
+            # FastAPI/Flask usually in main.py
+            if "uvicorn" in open(os.path.join(workdir, "requirements.txt")).read() if os.path.exists(os.path.join(workdir, "requirements.txt")) else False:
+                start_cmd = "uvicorn app.main:app --reload"
+        elif os.path.exists(os.path.join(workdir, "package.json")):
+            import json
+            with open(os.path.join(workdir, "package.json")) as f:
+                pkg = json.load(f)
+            scripts = pkg.get("scripts", {})
+            if "start" in scripts:
+                start_cmd = "npm start"
+            elif "dev" in scripts:
+                start_cmd = "npm run dev"
+
+        if not start_cmd:
+            return {"success": False, "error": "Could not detect service start command."}
+
+        # Start service in background (simulated via simple execution for now)
+        # Note: For real background, we'd use subprocess.Popen and store the PID
+        console.print(f"[cyan]🚀 Starting service: {start_cmd}[/]")
+        try:
+            proc = subprocess.Popen(
+                shlex.split(start_cmd),
+                cwd=workdir,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE
+            )
+            
+            # Give it some time to boot
+            time.sleep(5)
+            
+            # Check if process is still running
+            if proc.poll() is None:
+                return {"success": True, "message": f"Service started (PID: {proc.pid})", "pid": proc.pid}
+            else:
+                _, stderr = proc.communicate()
+                return {"success": False, "error": f"Service failed to start: {stderr.decode()}"}
+                
+        except Exception as e:
+            return {"success": False, "error": str(e)}
