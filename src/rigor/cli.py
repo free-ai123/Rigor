@@ -255,6 +255,41 @@ def setup(dir):
             if res.get('suggestion'):
                 console.print(f"[yellow]   💡 Suggestion: {res['suggestion']}[/yellow]")
 
+@main.command(name="knowledge")
+@click.option("--vault", "-v", default=None, help="Obsidian Vault 路径")
+@click.argument("query", required=False)
+def knowledge(query, vault):
+    """管理知识库 (索引 / 全文搜索)"""
+    from rigor.modules.knowledge import KnowledgeEngine
+    
+    engine = KnowledgeEngine(vault_path=vault)
+    
+    if query:
+        # Search mode
+        console.print(f"[cyan]🔍 正在搜索: '{query}'[/]")
+        results = engine.search(query)
+        if not results:
+            console.print("[yellow]未找到相关知识。[/]")
+        else:
+            console.print(f"[green]✅ 找到 {len(results)} 条结果:[/]")
+            for i, r in enumerate(results):
+                console.print(f"\n[bold]{i+1}. {r['title']}[/] ({r['category']})")
+                console.print(f"   路径: {r['path']}")
+                console.print(f"   预览: {r['content_preview']}")
+    else:
+        # Index & Stats mode
+        console.print("[cyan]📚 正在索引知识库...[/]")
+        stats = engine.get_stats()
+        if stats.get('total_documents', 0) == 0:
+            result = engine.index_vault()
+            stats = engine.get_stats()
+        console.print(f"[green]✅ 知识库状态:[/]")
+        console.print(f"   总文档: {stats.get('total_documents', 0)}")
+        console.print(f"   索引路径: {stats.get('db_path', 'N/A')}")
+    
+    engine.close()
+
+
 @main.command(name="webhook")
 @click.option("--port", "-p", default=9999, help="Webhook 监听端口 (默认: 9999)")
 @click.option("--ci-platform", type=click.Choice(["github", "gitlab", "auto"]), default="auto", help="CI 平台")
@@ -279,8 +314,20 @@ def webhook(port, ci_platform):
         )
         console.print(f"  URL: {event.get('url', 'N/A')}")
         
-        # TODO: 自动将结果反馈给 Kanban 任务
-        console.print("  [dim]反馈给 Agent: 待实现[/]")
+        # Auto-Fix: 当 CI 失败时自动创建修复任务
+        if event.get("status") not in ("success", "passed"):
+            from rigor.modules.autofix import AutoFixEngine
+            autofix = AutoFixEngine()
+            error_detail = event.get("name", "Unknown CI error")
+            result = autofix.create_fix_task_from_ci(
+                repo=event["repo"],
+                pr_number=event.get("pr_number", 0),
+                pr_url=event.get("url", ""),
+                ci_error=error_detail,
+                ci_platform=platform,
+            )
+            if result.get("success"):
+                console.print(f"[green]✅ 自动修复任务已创建: #{result.get('task_id')}[/]")
 
     manager = CIWebhookManager(port=port)
     manager.start(handle_ci_event)
