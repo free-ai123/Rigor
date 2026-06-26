@@ -193,6 +193,36 @@ product-manager UAT 打回 → 创建修复任务：
   - 修复完成后自动触发 UAT 二次验收
 ```
 
+### 5. Multi-Agent Debate（多代理辩论 — 当审查者与被审查者意见不一致时）
+
+当 code-reviewer 或 security-auditor 发现 critical/high 问题但工程师认为不需要修改时：
+```
+触发三方辩论：engineer + reviewer + tech-lead
+→ tech-lead 作为仲裁者裁决
+→ 记录最终决策到 shared/decisions/<debate-topic>.md
+→ 辩论结果包含：问题描述、各方立场、最终裁决、裁决依据
+```
+
+### 6. Continuous Improvement Loop（技能自动发布）
+
+项目复盘后，Orchestrator 自动执行技能提取：
+```
+1. 扫描 shared/gotchas/ 中 prevented_count >= 3 的条目
+2. 将高频踩坑经验转换为 Skill 格式（SKILL.md frontmatter + body）
+3. 写入 ~/.hermes/skills/rigor-auto/<skill-name>/SKILL.md
+4. 下次同类项目自动加载这些 Skill
+```
+
+### 7. User-in-the-Loop（人在回路 — 关键节点确认点）
+
+在以下关键节点，**暂停自动流程，等待用户确认**：
+```
+确认点 1: PRD 完成后 → 用户确认需求方向
+确认点 2: 架构设计完成后 → 用户确认技术选型
+确认点 3: UAT 之前 → 用户确认实现方向
+```
+每个确认点用户可选择：✅ 继续 / ❌ 修改（附反馈） / 💬 补充说明
+
 ### 修复闭环规则
 1. **自动二次验证**：修复任务完成后，自动分配给原审核者进行二次审查，不等待人工触发
 2. **最多 3 次迭代**：同一缺陷最多自动修复 3 次，超过后触发人工干预协议
@@ -353,6 +383,16 @@ product-manager UAT 打回 → 创建修复任务：
 | `test-cases.md` | v1 设计，每次补充 +1 | backend、frontend 启动时确认 |
 
 **版本冲突处理**：如果下游角色发现上游 artifact 版本与任务描述中的版本不一致，必须调用 `kanban_block(reason="artifact-version-mismatch: ...")` 暂停任务，等待上游更新。
+
+## Reflexion（自我反思 — 完成后自动执行）⭐
+
+**完成任务后，必须对自身产出进行 3 维自我评估：**
+
+1. **质量评分（1-10）**：产出物是否有 TODO/重复/复杂度过高？是否有改进空间？
+2. **完整性评分（1-10）**：需求的每个要求都覆盖了吗？有没有遗漏的边界条件？
+3. **风险评分（1-10）**：有没有潜在的异常处理、性能问题没处理？
+
+> 如果任何一项评分 < 7，必须主动修正后再提交完成。自我评估必须写入 status-report.json 的 self_assessment 字段。
 
 ## 项目复盘（Project Retrospective）
 
