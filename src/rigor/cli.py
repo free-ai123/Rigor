@@ -221,7 +221,11 @@ def init_project(project_name):
 
 @main.command()
 def tui():
-    """启动实时 TUI 仪表盘"""
-    from rigor.tui.app import RigorTUI
-    app = RigorTUI()
-    app.run()
+    """启动实时 TUI 仪表盘 (k9s 风格)"""
+    try:
+        from rigor.tui.app import RigorTUIApp
+        app = RigorTUIApp()
+        app.run()
+    except ImportError as e:
+        console.print(f"[red]❌ 缺少依赖: {e}[/]")
+        console.print("[yellow]请运行: pip install textual[/]")
