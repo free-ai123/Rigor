@@ -290,6 +290,18 @@ def knowledge(query, vault):
     engine.close()
 
 
+@main.command(name="watch-fix")
+@click.option("--db", default="~/.hermes/kanban/board.db", help="Kanban DB 路径")
+@click.option("--workspace", "-w", default=".", help="项目工作目录")
+@click.option("--interval", "-i", default=15, type=int, help="轮询间隔 (秒)")
+@click.option("--max-retries", "-r", default=3, type=int, help="最大重试次数")
+@click.option("--dry-run", is_flag=True, help="仅模拟，不写数据库")
+def watch_fix(db, workspace, interval, max_retries, dry_run):
+    """启动 Auto-Fix 后台守护进程 (自修复循环)"""
+    from rigor.autofix import watch_fix as _watch_fix
+    _watch_fix(standalone_mode=False, db=db, workspace=workspace, interval=interval, max_retries=max_retries, dry_run=dry_run)
+
+
 @main.command(name="webhook")
 @click.option("--port", "-p", default=9999, help="Webhook 监听端口 (默认: 9999)")
 @click.option("--ci-platform", type=click.Choice(["github", "gitlab", "auto"]), default="auto", help="CI 平台")

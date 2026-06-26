@@ -105,6 +105,13 @@ rigor webhook --port 9999
 ```
 *Point your GitHub/GitLab webhook to `http://your-server:9999`.*
 
+### 🤖 Auto-Fix Background Worker
+Start the self-healing daemon to automatically fix failed tasks:
+```bash
+rigor watch-fix --workspace /path/to/project
+```
+*Monitors the Kanban for `auto-fix` tasks, runs linters/tests, and updates status.*
+
 ### 🧠 Knowledge Management
 Index your Obsidian vault and search for context:
 ```bash
