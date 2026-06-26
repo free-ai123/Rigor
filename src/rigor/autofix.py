@@ -1,5 +1,12 @@
-"""Auto-Fix Loop: Autonomous self-healing background worker for Rigor Kanban."""
+"""Auto-Fix Loop: Autonomous self-healing background worker for Rigor Kanban.
 
+Combines:
+1. Kanban task polling for `auto-fix` tagged tasks
+2. Error parsing & deterministic patch generation
+3. Lint/fix execution
+4. Test execution & validation
+5. Task status updates with retry limits
+"""
 from __future__ import annotations
 
 import asyncio
@@ -12,7 +19,8 @@ import time
 from pathlib import Path
 from typing import Dict, List
 
-import click
+from rigor.core.file_ops import FileOps
+from rigor.core.patch_gen import ErrorParser, PatchGenerator
 
 logging.basicConfig(
     level=logging.INFO,
@@ -23,8 +31,6 @@ logger = logging.getLogger("rigor.autofix")
 
 
 class ProjectDetector:
-    """Detect project type from workspace root."""
-
     @staticmethod
     def detect(workspace: Path) -> str:
         if (workspace / "pyproject.toml").exists() or (workspace / "requirements.txt").exists() or (workspace / "setup.py").exists():
@@ -39,14 +45,13 @@ class ProjectDetector:
 
 
 class AutoFixEngine:
-    """Executes deterministic self-healing strategies."""
-
     def __init__(self, workspace: Path):
         self.workspace = workspace
         self.project_type = ProjectDetector.detect(workspace)
+        self.file_ops = FileOps(str(workspace))
+        self.patch_gen = PatchGenerator(self.file_ops)
 
     def run_lint_fix(self) -> Dict:
-        """Run auto-formatters/linters based on project type."""
         cmds: List[List[str]] = []
         if self.project_type == "python":
             cmds = [["ruff", "check", "--fix", "."], ["ruff", "format", "."]]
@@ -72,7 +77,6 @@ class AutoFixEngine:
         return {"success": success, "logs": "\n".join(logs), "actions_taken": ["lint_fix"]}
 
     def run_tests(self) -> Dict:
-        """Run tests and capture results."""
         cmds: List[str] = []
         if self.project_type == "python":
             if (self.workspace / "pytest.ini").exists() or (self.workspace / "pyproject.toml").exists():
@@ -95,18 +99,43 @@ class AutoFixEngine:
         except Exception as e:
             return {"success": False, "logs": f"Test runner failed: {e}", "actions_taken": []}
 
+    def attempt_patch(self, error_output: str) -> Dict:
+        """Parse errors and generate/apply patches."""
+        issues = ErrorParser.parse(error_output)
+        if not issues:
+            return {"success": False, "logs": "No specific issues found to patch.", "actions_taken": []}
+
+        logs = []
+        actions = []
+        for issue in issues:
+            logger.info(f"  📝 Fixing {issue['file']}:{issue['line']} - {issue['message']}")
+            patch = self.patch_gen.generate_patch(issue["file"], issue["line"], issue["message"])
+            if patch:
+                try:
+                    current_content = self.file_ops.read_file(issue["file"])
+                    # Apply patch (simplified: prepend import, replace line, etc.)
+                    if patch.startswith("import ") or patch.startswith("from "):
+                        # Insert import at top of file
+                        lines = current_content.split("\n")
+                        for i, l in enumerate(lines):
+                            if l.startswith("import ") or l.startswith("from ") or (l.startswith("#") and i < 5):
+                                continue
+                            lines.insert(i, patch)
+                            break
+                        self.file_ops.write_file(issue["file"], "\n".join(lines))
+                        logs.append(f"✅ Applied import: {patch}")
+                        actions.append("patch_import")
+                    else:
+                        logs.append(f"💡 Suggestion: {patch}")
+                        actions.append("suggestion")
+                except Exception as e:
+                    logs.append(f"❌ Patch failed: {e}")
+
+        return {"success": len(actions) > 0, "logs": "\n".join(logs), "actions_taken": actions}
+
 
 class AutoFixWorker:
-    """Background worker that polls Kanban and executes fixes."""
-
-    def __init__(
-        self,
-        db_path: str,
-        workspace: str,
-        poll_interval: int = 15,
-        max_retries: int = 3,
-        dry_run: bool = False,
-    ):
+    def __init__(self, db_path: str, workspace: str, poll_interval: int = 15, max_retries: int = 3, dry_run: bool = False):
         self.db_path = db_path
         self.workspace = Path(workspace).resolve()
         self.poll_interval = poll_interval
@@ -145,8 +174,7 @@ class AutoFixWorker:
         try:
             meta_update = {"last_fix_log": logs[-2000:], "last_fix_at": time.strftime("%Y-%m-%dT%H:%M:%S")}
             conn.execute(
-                """UPDATE tasks SET status=?, retry_count=?, metadata=?, updated_at=? 
-                   WHERE id=?""",
+                """UPDATE tasks SET status=?, retry_count=?, metadata=?, updated_at=? WHERE id=?""",
                 (status, retry_count, json.dumps(meta_update), time.strftime("%Y-%m-%dT%H:%M:%S"), task_id),
             )
             conn.commit()
@@ -179,6 +207,15 @@ class AutoFixWorker:
             logger.info(f"  [DRY RUN] Would process task {task_id}.")
             return
 
+        # Step 0: Parse error and try patching
+        desc = task.get("description", "")
+        patch_res = {"success": False, "logs": "", "actions_taken": []}
+        if desc:
+            logger.info("  🔍 Analyzing errors and generating patches...")
+            patch_res = self.engine.attempt_patch(desc)
+            if patch_res.get("success"):
+                logger.info(f"    ✅ Patch applied: {patch_res['actions_taken']}")
+
         # Step 1: Lint & Format
         logger.info("  🧹 Running linters/formatters...")
         lint_res = self.engine.run_lint_fix()
@@ -187,7 +224,7 @@ class AutoFixWorker:
         logger.info("  🧪 Running tests...")
         test_res = self.engine.run_tests()
 
-        all_logs = (lint_res.get("logs", "") + "\n" + test_res.get("logs", "")).strip()
+        all_logs = (patch_res.get("logs", "") + "\n" + lint_res.get("logs", "") + "\n" + test_res.get("logs", "")).strip()
 
         if test_res.get("success", True):
             logger.info(f"  ✅ Task {task_id} fixed successfully.")
@@ -201,19 +238,3 @@ class AutoFixWorker:
     def stop(self):
         self.running = False
         logger.info("🛑 AutoFix worker stopping...")
-
-
-@click.command()
-@click.option("--db", default="~/.hermes/kanban/board.db", help="Path to Kanban SQLite DB")
-@click.option("--workspace", default=".", help="Project workspace root")
-@click.option("--interval", default=15, type=int, help="Poll interval in seconds")
-@click.option("--max-retries", default=3, type=int, help="Max auto-fix attempts per task")
-@click.option("--dry-run", is_flag=True, help="Simulate fixes without writing to DB")
-def watch_fix(db: str, workspace: str, interval: int, max_retries: int, dry_run: bool):
-    """🤖 Start the Auto-Fix background daemon."""
-    db_path = os.path.expanduser(db)
-    worker = AutoFixWorker(db_path, workspace, interval, max_retries, dry_run)
-    try:
-        asyncio.run(worker.run())
-    except KeyboardInterrupt:
-        worker.stop()
