@@ -307,9 +307,10 @@ run_dashboard() {
 
         if [ "$budget" != "0" ] && [ -n "$budget" ]; then
             local budget_pct=$(python3 -c "print(min(int(float('$total_cost') / float('$budget') * 100), 100))" 2>/dev/null || echo 0)
+            local exceeded=$(python3 -c "print(1 if float('$total_cost') >= float('$budget') else 0)" 2>/dev/null || echo 0)
             echo -e "  Budget:        ${WHITE}\$${total_cost} / \$${budget}${NC}"
             
-            if [ "$(echo "$total_cost >= $budget" | python3 -c "import sys; print(int(float(sys.stdin.read()) >= 0))" 2>/dev/null)" = "1" ]; then
+            if [ "$exceeded" = "1" ]; then
                 echo -e "  ${RED}${BOLD}⚠️  BUDGET EXCEEDED - Consider pausing agents${NC}"
             else
                 printf "  ${BOLD}Budget Usage:${NC} "
