@@ -1,16 +1,3 @@
-# Runtime directories (created by Hermes during execution)
-**/home/
-**/sessions/
-**/logs/
-**/memories/
-**/.hermes/
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# Editor files
-.vscode/
-.idea/
-*.swp
-*~
+__pycache__/
+*.egg-info/
+*.pyc

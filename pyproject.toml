@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=40", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rigor-cli"
+version = "2.0.0"
+description = "12-Role AI Engineering Team - CLI and Modules"
+requires-python = ">=3.6"
+dependencies = [
+    "click>=7.0",
+    "pyyaml>=5.0",
+    "requests>=2.20",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=4.0"]
+
+[project.scripts]
+rigor = "rigor.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -1,0 +1,3 @@
+[console_scripts]
+rigor = rigor.cli:main
+
