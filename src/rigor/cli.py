@@ -3,6 +3,7 @@
 import click
 import sys
 import os
+from typing import Dict, Any
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -229,3 +230,44 @@ def tui():
     except ImportError as e:
         console.print(f"[red]❌ 缺少依赖: {e}[/]")
         console.print("[yellow]请运行: pip install textual[/]")
+
+
+# ===================== CI/CD Webhook =====================
+
+@main.command(name="webhook")
+@click.option("--port", "-p", default=9999, help="Webhook 监听端口 (默认: 9999)")
+@click.option("--ci-platform", type=click.Choice(["github", "gitlab", "auto"]), default="auto", help="CI 平台")
+def webhook(port, ci_platform):
+    """启动 CI/CD Webhook 监听服务"""
+    from rigor.modules.webhook import CIWebhookManager, parse_github_payload, parse_gitlab_payload
+
+    def handle_ci_event(platform: str, payload: Dict[str, Any]):
+        """处理 CI 事件回调"""
+        if platform == "github":
+            event = parse_github_payload(payload)
+        else:
+            event = parse_gitlab_payload(payload)
+
+        status_icon = "✅" if event.get("status") in ("success", "passed") else "❌"
+        console.print(
+            f"[bold]{status_icon} CI 结果: "
+            f"[cyan]{event['repo']}[/] | "
+            f"{event['name']} | "
+            f"[{'green' if event['status'] in ('success', 'passed') else 'red'}]{event['status']}[/] | "
+            f"分支: {event['ref']}"
+        )
+        console.print(f"  URL: {event.get('url', 'N/A')}")
+        
+        # TODO: 自动将结果反馈给 Kanban 任务
+        console.print("  [dim]反馈给 Agent: 待实现[/]")
+
+    manager = CIWebhookManager(port=port)
+    manager.start(handle_ci_event)
+    
+    console.print(f"[dim]按 Ctrl+C 停止服务[/]")
+    try:
+        import time
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        manager.stop()
