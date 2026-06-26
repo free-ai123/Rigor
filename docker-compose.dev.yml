@@ -1,0 +1,14 @@
+version: "3.8"
+
+services:
+  rigor-dev:
+    build:
+      context: .
+      dockerfile: .devcontainer/Dockerfile
+    volumes:
+      - .:/workspace:cached
+      - ~/.hermes:/root/.hermes
+    environment:
+      - TERM=xterm-256color
+    tty: true
+    stdin_open: true
