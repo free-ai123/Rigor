@@ -219,5 +219,9 @@ def init_project(project_name):
         console.print("[red]❌ 找不到脚手架脚本[/]")
 
 
-if __name__ == "__main__":
-    main()
+@main.command()
+def tui():
+    """启动实时 TUI 仪表盘"""
+    from rigor.tui.app import RigorTUI
+    app = RigorTUI()
+    app.run()
