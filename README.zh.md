@@ -2,6 +2,10 @@
 
 > **从故事到生产环境** — 一个全自主、自愈合的 AI 软件工程团队，基于 Hermes Agent 构建。
 
+<div align="center">
+  <a href="README.md">🇺🇸 English</a> | <a href="README.zh.md">🇨🇳 中文文档</a>
+</div>
+
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.6%2B-3776AB)](https://www.python.org/)
 [![Framework](https://img.shields.io/badge/Built%20on-Hermes%20Agent-2b6cb0)](https://hermes-agent.nousresearch.com/)

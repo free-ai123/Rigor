@@ -2,6 +2,10 @@
 
 > **From Story to Production** — A fully autonomous, self-healing AI software engineering team powered by Hermes Agent.
 
+<div align="center">
+  <a href="README.md">🇺🇸 English</a> | <a href="README.zh.md">🇨🇳 中文文档</a>
+</div>
+
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.6%2B-3776AB)](https://www.python.org/)
 [![Framework](https://img.shields.io/badge/Built%20on-Hermes%20Agent-2b6cb0)](https://hermes-agent.nousresearch.com/)
