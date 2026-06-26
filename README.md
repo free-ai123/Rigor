@@ -1,255 +1,166 @@
-# Rigor
+# 🤖 Rigor: The Autonomous 12-Role AI Engineering Team
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Hermes Agent](https://img.shields.io/badge/Hermes-Agent-blue.svg)](https://hermes-agent.nousresearch.com/docs/)
-[![Profiles](https://img.shields.io/badge/Profiles-12-orange.svg)](#12-roles)
+> **From Story to Production** — A fully autonomous, self-healing AI software engineering team powered by Hermes Agent.
 
-**Engineering quality at AI speed.**
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.6%2B-3776AB)](https://www.python.org/)
+[![Framework](https://img.shields.io/badge/Built%20on-Hermes%20Agent-2b6cb0)](https://hermes-agent.nousresearch.com/)
 
-Rigor is a complete AI engineering team — 12 specialized roles that collaborate through a Kanban board, covering the full software engineering lifecycle: requirements → architecture → implementation → code review → QA testing → security audit → deployment → UAT → retrospective.
+## 🚀 Overview
 
-> Not another AI coding assistant. It's a **team of autonomous AI experts** that deliver code by standard engineering processes.
+**Rigor** is an AI-native engineering framework that simulates a complete 12-role software team. It goes beyond simple code generation by implementing structured workflows (SDD + TDD), continuous integration loops, and autonomous self-healing capabilities.
 
-Built on [Hermes Agent](https://github.com/NousResearch/hermes-agent) — pure SOUL.md profiles + Kanban workflow. No custom code needed.
+### ✨ Key Features
+
+#### 🧠 12 Expert AI Agents
+A specialized team handling every stage of the SDLC:
+- **Management**: Product Manager, Tech Lead, Orchestrator
+- **Engineering**: Backend Engineer, Frontend Engineer, Data Scientist
+- **Quality**: QA Engineer, Security Auditor, Code Reviewer
+- **Operations**: DevOps Engineer, Technical Writer, Data Engineer
+
+#### 🔄 Self-Healing CI/CD Loop
+Rigor doesn't just write code; it fixes it.
+- **Auto-Fix Engine**: Automatically detects CI failures or runtime errors.
+- **Smart Task Creation**: Generates repair tasks with error context and assigns them to the correct agent.
+- **Webhook Integration**: Listens to GitHub/GitLab events in real-time.
+
+#### 🖥️ Real-time TUI Dashboard
+Monitor your AI team in a `k9s`-style terminal interface:
+- **Live Kanban**: Watch tasks move from TODO → DONE.
+- **Agent Status Matrix**: See who is working, idle, or blocked.
+- **Cost & Token Tracking**: Real-time monitoring of AI resource usage.
+
+#### 🛠️ 5-Layer Autonomous Environment Setup
+Agents can configure their own execution environment:
+1. **Dependencies**: Auto-install `pip`, `npm`, or `go mod`.
+2. **System Tools**: Verify binaries (Docker, FFmpeg, etc.).
+3. **Env Vars**: Generate `.env` from templates with secure secrets.
+4. **Database**: Run migrations (Django, Alembic, Prisma) automatically.
+5. **Service**: Detect and start the application (FastAPI, Flask, Next.js).
+
+#### 📦 Multi-Platform Git Support
+Seamless integration with your workflow:
+- **GitHub** (API v3)
+- **GitLab** (API v4)
+- **Gitea** / Gitee
+- **Auto-Detection**: Rigor automatically detects your remote origin.
+
+#### 🔍 RAG Knowledge Base
+Build a long-term memory for your team:
+- **Obsidian Compatible**: Indexes Markdown files with YAML frontmatter.
+- **Semantic Search**: Uses SQLite FTS5 for zero-dependency, high-speed retrieval.
+- **Context Injection**: Agents automatically load relevant past decisions and patterns.
+
+#### 🛡️ SDD + TDD Hybrid Workflow
+- **Story-Driven (SDD)**: PM writes User Stories with Given/When/Then Acceptance Criteria.
+- **Test-Driven (TDD)**: QA converts AC into BDD tests before implementation begins.
 
 ---
 
-## Why Rigor?
-
-| Capability | Rigor | Devin | Cursor | Copilot |
-|------------|-------|-------|--------|---------|
-| **Multi-Role Collaboration** | **88%** | 30% | 20% | 50% |
-| **Engineering Quality** | **92%** | 75% | 40% | 65% |
-| **TDD-First Workflow** | **82%** | 45% | 10% | 20% |
-| **Coverage Gate** | **88%** | 70% | 10% | 25% |
-| **Deployment Rollback** | **72%** | 50% | 0% | 20% |
-| **Project Retrospective** | **68%** | 0% | 0% | 0% |
-| **Structured Knowledge Base** | **76%** | 65% | 20% | 35% |
-| **Observability** | **68%** | 52% | 15% | 22% |
-
-*Data source: Multi-Agent System Capability Analysis, June 2026*
-
-## 12 Roles
-
-| Role | Responsibility | Key Output |
-|------|---------------|------------|
-| 🧠 **Orchestrator** | Task decomposition, routing, progress tracking | DAG plan, assignment |
-| 📋 **Product Manager** | Requirements, PRD, UAT acceptance | PRD, acceptance report |
-| 🏗️ **Tech Lead** | Architecture, DAG planning, ADR | Architecture, DAG, contracts |
-| 💻 **Backend Engineer** | API, database, service logic | Code, migrations |
-| 🎨 **Frontend Engineer** | UI components, state management | Components, pages |
-| 📊 **Data Scientist** | Data analysis, ML, modeling | Reports, models |
-| 🔧 **Data Engineer** | Pipelines, vector DB, RAG | Pipeline config, embeddings |
-| 🔍 **Code Reviewer** | Architecture + code review (2 phases) | Review report |
-| 🛡️ **Security Auditor** | Security audit (design + code phase) | Security report |
-| 🧪 **QA Engineer** | Test design, automation, coverage | Test scripts, coverage |
-| 🔧 **DevOps Engineer** | CI/CD, containers, deployment | Dockerfile, pipeline |
-| 📝 **Technical Writer** | Technical docs, API docs, README | Documentation |
-
-## Architecture
-
-```
-User Input (natural language requirement)
-    ↓
-Orchestrator (detects project type → selects roles → decomposes into DAG)
-    ↓
-┌─────────────────────────────────────────────┐
-│  Kanban Board (SQLite, auto-decompose)      │
-│  ┌─────┐  ┌──────┐  ┌──────┐  ┌──────────┐  │
-│  │ PRD │→ │Arch  │→ │Impl  │→ │Review/Test│  │
-│  └─────┘  └──────┘  └──────┘  └──────────┘  │
-└─────────────────────────────────────────────┘
-    ↓ (60s tick, Gateway dispatch)
-12 Role Profiles execute in parallel (where dependencies allow)
-    ↓ (Artifact chain: PRD → API Spec → Test Cases → Docs)
-Deploy → UAT → Retrospective → Knowledge Capture
-```
-
-## Quick Start
+## 📦 Installation
 
 ### Prerequisites
+- **Python 3.6+**
+- **Hermes Agent**: Rigor is built on top of Hermes Agent for profile management and Kanban execution. [Install Hermes](https://hermes-agent.nousresearch.com/docs/)
 
-- [Hermes Agent](https://hermes-agent.nousresearch.com/docs/) installed
-- API key configured (DashScope, OpenRouter, etc.)
-- 2GB RAM minimum (5 roles) / 4GB recommended (all 12 roles)
-
-### 5 Minutes to Your First Project
+### Quick Start
 
 ```bash
-# 1. Clone
+# 1. Clone the repository
 git clone https://github.com/free-ai123/Rigor.git
 cd Rigor
 
-# 2. Deploy
-bash scripts/setup-expert-team.sh
+# 2. Install dependencies
+pip install -e ".[dev]"
 
-# 3. Create your first task
-hermes kanban create "Build a URL shortener with custom codes and click tracking" --triage
-```
-
-60 seconds later, Orchestrator decomposes the task, 12 roles start collaborating.
-
-### Monitor Progress
-
-```bash
-# Task list
-hermes kanban list
-
-# Project dashboard (auto-updated)
-cat ~/.hermes/kanban/workspace/shared/structured/project-dashboard.json | python3 -m json.tool
-
-# Task dependency tree
-hermes kanban show <task-id> --tree
-```
-
-## Repository Structure
-
-```
-Rigor/                          # 32 files, ~30KB
-├── profiles/                   # 12 expert roles (SOUL.md + config.yaml each)
-│   ├── orchestrator/
-│   ├── product-manager/
-│   ├── tech-lead/
-│   ├── backend-engineer/
-│   ├── frontend-engineer/
-│   ├── data-scientist/
-│   ├── data-engineer/
-│   ├── code-reviewer/
-│   ├── security-auditor/
-│   ├── qa-engineer/
-│   ├── devops-engineer/
-│   └── technical-writer/
-├── scripts/
-│   └── setup-expert-team.sh    # One-click deployment (v2.0)
-├── knowledge-base/
-│   └── structured/             # Structured knowledge base
-│       ├── knowledge-index.json  # 6 entries, 68 synonyms
-│       ├── effectiveness.json    # Effectiveness tracking + decay rules
-│       ├── project-profiles.json # Auto-inject rules
-│       └── edges.json            # Knowledge relationship graph
-├── docs/                         # Documentation
-│   ├── architecture.md           # System architecture
-│   ├── quickstart.md             # 5-minute guide
-│   └── troubleshooting.md        # Common issues and fixes
-├── examples/                     # Example projects
-│   └── url-shortener/            # Full project output example
-├── CONTRIBUTING.md               # How to contribute
-├── README.md                     # English
-├── README.zh.md                  # 中文
-├── README.ja.md                  # 日本語
-├── LICENSE                       # MIT
-└── .gitignore
-```
-
-## Comparison
-
-### Why not Devin?
-
-Devin is a powerful single-agent developer, great at writing code fast. But it has only **one role** — no product review, no security audit, no QA testing, no deployment rollback.
-
-Rigor is **12 roles collaborating by standard software engineering processes**, delivering **engineering quality**, not just coding speed.
-
-### Why not Cursor?
-
-Cursor is an excellent AI coding assistant that helps **you** write code. But it doesn't collaborate autonomously — you decide architecture, write tests, and review yourself.
-
-Rigor is an **autonomous AI team** — you provide the requirement, the rest is handled.
-
-## Task Management (Real-world Examples)
-
-**Context**: Imagine you just created a task (`t_123456`) to "Build a GitHub Trend Collector". Here is how you manage it.
-
-### ✏️ Correcting a Task (Mid-flight)
-You noticed the task description lacked a requirement (e.g., "Sort by stars"), and the Agent is already working on it. **Do NOT delete the task.**
-
-*   **Add a Comment (Recommended)**: The Agents read new comments in the next ~60s cycle.
-    ```bash
-    # Example: Adding a sorting requirement to the running task
-    hermes kanban comment t_123456 "Correction: Please sort repositories by 'Most Stars' in descending order. Also, use a dark blue theme."
-    ```
-*   **Update Description**: Rewrites the task card itself.
-    ```bash
-    hermes kanban update t_123456 --body "New complete description..."
-    ```
-
-### 🛑 Stopping or Resetting
-The task is stuck, the API is throwing errors, or you want to stop it to save money.
-
-*   **Stop (Block)**: Freezes the task and prevents sub-tasks from running.
-    ```bash
-    hermes kanban block t_123456 "Cancelled: API rate limit exceeded"
-    ```
-*   **Reset**: Moves the task back to `todo` status so it can be retried (useful if an Agent failed due to a temporary glitch).
-    ```bash
-    hermes kanban reset t_123456
-    ```
-*   **Archive**: Hides the task from the main list (good for cleanup, data is preserved).
-    ```bash
-    hermes kanban archive t_123456
-    ```
-
-### 🧹 Cleanup
-To hide all completed tasks:
-```bash
-hermes kanban list --status done | grep -oE 't_[a-f0-9]+' | xargs -I {} hermes kanban archive {}
-```
-
-## Knowledge Base
-
-Rigor includes a structured knowledge base for cross-project experience reuse:
-
-- **knowledge-index.json** — 6 knowledge entries with tags, 68 synonyms, confidence scores, and relevance rules
-- **effectiveness.json** — Tracks how many times each knowledge item prevented a real issue, with automatic decay rules (30d unused → declining, 60d → stale, 180d → archived)
-- **project-profiles.json** — Auto-injects relevant knowledge based on project type and active roles
-- **edges.json** — Relationship graph connecting decisions → bugs → fixes → patterns
-
-## Roadmap
-
-- [x] 12 role SOUL.md + collaboration workflow
-- [x] TDD-first mode (QA writes tests before implementation)
-- [x] Coverage gate (line ≥ 80%, branch ≥ 70%)
-- [x] Artifact version management
-- [x] Self-correction loop (auto-fix + human escalation)
-- [x] Structured knowledge base (index + semantic + decay)
-- [x] Project dashboard + task status reports
-- [x] Project retrospective + history archive
-- [x] Deployment rollback protocol
-- [x] Incremental update mode
-- [x] Code style unification (ruff / prettier / eslint)
-- [ ] More vertical domain roles (finance, healthcare, legal)
-- [ ] Custom role creation guide
-- [ ] Web Dashboard integration
-- [ ] Multi-language SOUL.md support
-
-## Maintenance
-
-### 🧹 Clean Up Completed Tasks
-To keep your kanban list clean, you can **archive** all `done` tasks in one go. This hides them from the default list but keeps them in the database (you can still view them with `--archived`).
-
-```bash
-hermes kanban list --status done | grep -oE 't_[a-f0-9]+' | xargs -I {} hermes kanban archive {}
-```
-
-### 📜 View Archived History
-```bash
-hermes kanban list --archived
+# 3. Launch the TUI Dashboard
+rigor tui
 ```
 
 ---
 
-## Contributing
+## 📖 Usage
 
-Contributions welcome!
+### 🚀 Interactive Dashboard
+Launch the real-time monitoring interface:
+```bash
+rigor tui
+```
 
-- **Add a new role**: Fork → create `profiles/<role>/SOUL.md` → PR
-- **Improve existing role**: Edit `profiles/<role>/SOUL.md` → PR
-- **Add knowledge**: Update `knowledge-base/` → PR
-- **Report bugs**: Issues or PRs welcome
+### 🛠️ Environment Setup
+Autonomously configure a project environment (Dependencies + Env Vars + DB):
+```bash
+rigor setup -d /path/to/project
+```
 
-## License
+### 🔄 CI/CD Webhook Listener
+Start the listener to enable Auto-Fix loops:
+```bash
+rigor webhook --port 9999
+```
+*Point your GitHub/GitLab webhook to `http://your-server:9999`.*
 
-MIT — see [LICENSE](LICENSE)
+### 🧠 Knowledge Management
+Index your Obsidian vault and search for context:
+```bash
+# Index all markdown files in the vault
+rigor knowledge --vault ./my-knowledge-base
+
+# Search for specific patterns
+rigor knowledge "how to implement auth"
+```
+
+### 📝 Project Scaffolding
+Generate a new project structure with SDD templates:
+```bash
+rigor init my-new-api
+```
+
+### 🛡️ Security & Quality
+Scan for dependency vulnerabilities:
+```bash
+rigor scan
+```
+
+### 📊 Reporting
+Generate daily or weekly progress reports:
+```bash
+rigor report daily
+rigor report weekly
+```
 
 ---
 
-⭐ If Rigor is useful to you, a star is greatly appreciated!
+## 🏗️ Architecture
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                        Rigor CLI / TUI                           │
+├───────────────────────┬──────────────────────┬───────────────────┤
+│    🧠 Agent Core      │    🔄 Automation     │    📦 Integrations │
+│ - Hermes Profiles     │ - Auto-Fix Loop      │ - GitHub/GitLab   │
+│ - SOUL.md Config      │ - Env Setup (5-Layer)│ - Webhook Server  │
+│ - Kanban Executor     │ - CI/CD Webhooks     │ - Docker          │
+├───────────────────────┴──────────────────────┴───────────────────┤
+│    💾 Data Layer                                                 │
+│ - SQLite Kanban DB     - RAG Knowledge Base (FTS5)               │
+│ - Session Logs         - Artifact Registry                       │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+## 🗺️ Roadmap
+
+- [x] **Phase 0**: 12-Role Team, SDD/TDD, Kanban
+- [x] **Phase 1**: Python CLI, Multi-Git, TUI Dashboard, CI/CD Webhooks
+- [x] **Phase 2**: Auto-Fix Loop, Autonomous Env Setup, RAG Knowledge Base
+- [ ] **Phase 3**: VS Code Extension, Browser Agent Integration (E2E)
+- [ ] **Phase 4**: Enterprise Features (SSO, Approval Workflows, Multi-Project)
+
+## 🤝 Contributing
+
+We welcome contributions! Please read our [Contributing Guide](CONTRIBUTING.md).
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

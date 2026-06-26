@@ -1,260 +1,166 @@
-# Rigor
+# 🤖 Rigor: 自主 12 角色 AI 工程团队
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Hermes Agent](https://img.shields.io/badge/Hermes-Agent-blue.svg)](https://hermes-agent.nousresearch.com/docs/)
-[![Profiles](https://img.shields.io/badge/Profiles-12-orange.svg)](#12-个角色)
+> **从故事到生产环境** — 一个全自主、自愈合的 AI 软件工程团队，基于 Hermes Agent 构建。
 
-**以 AI 的速度，交付工程级的质量。**
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.6%2B-3776AB)](https://www.python.org/)
+[![Framework](https://img.shields.io/badge/Built%20on-Hermes%20Agent-2b6cb0)](https://hermes-agent.nousresearch.com/)
 
-Rigor 是一个完整的 AI 工程团队 — 12 个专业角色通过 Kanban 协作，覆盖软件工程全生命周期：需求 → 架构 → 实现 → 代码审查 → QA 测试 → 安全审计 → 部署 → UAT → 复盘。
+## 🚀 简介
 
-> 不是又一个 AI 编程助手。是一个**按标准工程流程交付代码的自主 AI 专家团队**。
+**Rigor** 是一个 AI 原生工程框架，模拟了一个完整的 12 角色软件团队。它超越了简单的代码生成，实现了结构化工作流 (SDD + TDD)、持续集成循环和自主自愈能力。
 
-基于 [Hermes Agent](https://github.com/NousResearch/hermes-agent) — 纯 SOUL.md 配置 + Kanban 工作流。无需编写任何自定义代码。
+### ✨ 核心特性
+
+#### 🧠 12 位 AI 专家
+一个涵盖 SDLC 全流程的专业团队：
+- **管理层**: 产品总监 (PM), 技术负责人 (Tech Lead), 协调者 (Orchestrator)
+- **工程层**: 后端工程师, 前端工程师, 数据科学家
+- **质量层**: 测试工程师 (QA), 安全审计员, 代码审查员
+- **运维层**: DevOps 工程师, 技术文档工程师, 数据工程师
+
+#### 🔄 自愈合 CI/CD 循环
+Rigor 不仅能写代码，还能自动修代码。
+- **Auto-Fix 引擎**: 自动检测 CI 失败或运行时错误。
+- **智能任务创建**: 自动生成修复任务，附带错误上下文并分配给对应专家。
+- **Webhook 集成**: 实时监听 GitHub/GitLab 事件。
+
+#### 🖥️ 实时 TUI 仪表盘
+在类似 `k9s` 的终端界面监控你的 AI 团队：
+- **实时看板**: 观看任务从 TODO → DONE 的流转。
+- **Agent 状态矩阵**: 查看谁在工作、谁空闲、谁被阻塞。
+- **成本与 Token 追踪**: 实时监控 AI 资源消耗。
+
+#### 🛠️ 5 层自主环境配置
+Agent 可以自动配置自己的运行环境：
+1. **依赖安装**: 自动安装 `pip`, `npm`, `go mod`。
+2. **系统工具**: 检查系统级二进制文件 (Docker, FFmpeg 等)。
+3. **环境变量**: 从模板生成 `.env` 并填充安全密钥。
+4. **数据库**: 自动运行迁移 (Django, Alembic, Prisma)。
+5. **服务启动**: 识别框架并启动应用 (FastAPI, Flask, Next.js)。
+
+#### 📦 多平台 Git 支持
+无缝集成你的工作流：
+- **GitHub** (API v3)
+- **GitLab** (API v4)
+- **Gitea** / Gitee
+- **自动检测**: Rigor 自动识别你的远程仓库类型。
+
+#### 🔍 RAG 知识库
+为团队构建长期记忆：
+- **Obsidian 兼容**: 索引带有 YAML Frontmatter 的 Markdown 文件。
+- **全文检索**: 使用 SQLite FTS5 实现零依赖、高速检索。
+- **上下文注入**: Agent 在启动时自动加载相关的历史决策和模式。
+
+#### 🛡️ SDD + TDD 混合工作流
+- **故事驱动 (SDD)**: PM 编写带有 Given/When/Then 验收标准的用户故事。
+- **测试驱动 (TDD)**: QA 在实现开始前将 AC 转化为 BDD 测试。
 
 ---
 
-## 为什么选 Rigor？
+## 📦 安装
 
-| 能力 | Rigor | Devin | Cursor | Copilot |
-|------|-------|-------|--------|---------|
-| **多角色协作** | **88%** | 30% | 20% | 50% |
-| **工程质量** | **92%** | 75% | 40% | 65% |
-| **TDD 优先** | **82%** | 45% | 10% | 20% |
-| **覆盖率门禁** | **88%** | 70% | 10% | 25% |
-| **部署回滚** | **72%** | 50% | 0% | 20% |
-| **项目复盘** | **68%** | 0% | 0% | 0% |
-| **结构化知识库** | **76%** | 65% | 20% | 35% |
-| **可观测性** | **68%** | 52% | 15% | 22% |
+### 前置条件
+- **Python 3.6+**
+- **Hermes Agent**: Rigor 构建在 Hermes Agent 之上，用于 Profile 管理和 Kanban 执行。[安装 Hermes](https://hermes-agent.nousresearch.com/docs/)
 
-*数据来源：多 Agent 系统能力对比分析，2026 年 6 月*
-
-## 12 个角色
-
-| 角色 | 职责 | 关键输出 |
-|------|------|---------|
-| 🧠 **Orchestrator** | 任务分解、路由、进度跟踪 | DAG 任务图、分配方案 |
-| 📋 **Product Manager** | 需求分析、PRD、UAT 验收 | PRD 文档、验收报告 |
-| 🏗️ **Tech Lead** | 技术架构、任务拆解、ADR | 架构决策、DAG 图、模块契约 |
-| 💻 **Backend Engineer** | API、数据库、服务逻辑 | 代码、迁移脚本 |
-| 🎨 **Frontend Engineer** | UI 组件、状态管理 | 组件、页面 |
-| 📊 **Data Scientist** | 数据分析、ML、建模 | 报告、模型 |
-| 🔧 **Data Engineer** | 数据管道、向量库、RAG | Pipeline 配置、Embedding 集成 |
-| 🔍 **Code Reviewer** | 架构审查 + 代码审查（两阶段） | 审查报告 |
-| 🛡️ **Security Auditor** | 安全审计（设计期 + 代码期） | 安全报告 |
-| 🧪 **QA Engineer** | 测试设计、自动化测试、覆盖率 | 测试脚本、覆盖率报告 |
-| 🔧 **DevOps Engineer** | CI/CD、容器化、部署 | Dockerfile、Pipeline |
-| 📝 **Technical Writer** | 技术文档、API 文档 | 文档 |
-
-## 架构
-
-```
-用户输入需求（自然语言）
-    ↓
-Orchestrator（判断项目类型 → 选择角色子集 → 拆解为 DAG）
-    ↓
-┌─────────────────────────────────────────────┐
-│  Kanban 看板（SQLite，自动分解）             │
-│  ┌─────┐  ┌──────┐  ┌──────┐  ┌──────────┐  │
-│  │ PRD │→ │架构  │→ │实现  │→ │审查/测试  │  │
-│  └─────┘  └──────┘  └──────┘  └──────────┘  │
-└─────────────────────────────────────────────┘
-    ↓（60 秒周期，Gateway 调度）
-12 个角色并行执行（依赖允许的地方）
-    ↓（Artifact 传递链：PRD → API Spec → 测试用例 → 文档）
-部署 → UAT → 复盘 → 知识沉淀
-```
-
-## 快速开始
-
-### 前提条件
-
-- 已安装 [Hermes Agent](https://hermes-agent.nousresearch.com/docs/)
-- 已配置 API Key（DashScope、OpenRouter 等）
-- 至少 2GB RAM（5 角色）/ 推荐 4GB（完整 12 角色）
-
-### 5 分钟上手
+### 快速开始
 
 ```bash
-# 1. 克隆
+# 1. 克隆仓库
 git clone https://github.com/free-ai123/Rigor.git
 cd Rigor
 
-# 2. 部署
-bash scripts/setup-expert-team.sh
+# 2. 安装依赖
+pip install -e ".[dev]"
 
-# 3. 创建第一个任务
-hermes kanban create "做一个短链接服务，支持自定义后缀和点击统计" --triage
-```
-
-60 秒后，Orchestrator 自动拆解任务，12 个角色开始协作。
-
-### 查看进度
-
-```bash
-# 任务列表
-hermes kanban list
-
-# 项目仪表盘（自动更新）
-cat ~/.hermes/kanban/workspace/shared/structured/project-dashboard.json | python3 -m json.tool
-
-# 任务依赖树
-hermes kanban show <task-id> --tree
-```
-
-## 仓库结构
-
-```
-Rigor/                          # 32 个文件，约 30KB
-├── profiles/                   # 12 个专家角色（每个含 SOUL.md + config.yaml）
-│   ├── orchestrator/
-│   ├── product-manager/
-│   ├── tech-lead/
-│   ├── backend-engineer/
-│   ├── frontend-engineer/
-│   ├── data-scientist/
-│   ├── data-engineer/
-│   ├── code-reviewer/
-│   ├── security-auditor/
-│   ├── qa-engineer/
-│   ├── devops-engineer/
-│   └── technical-writer/
-├── scripts/
-│   └── setup-expert-team.sh    # 一键部署脚本（v2.0）
-├── knowledge-base/
-│   └── structured/             # 结构化知识库
-│       ├── knowledge-index.json  # 6 条知识，68 个同义词
-│       ├── effectiveness.json    # 效果追踪 + 衰减规则
-│       ├── project-profiles.json # 自动注入规则
-│       └── edges.json            # 知识关系图谱
-├── docs/                         # 文档
-│   ├── architecture.md           # 系统架构
-│   ├── quickstart.md             # 5 分钟上手
-│   └── troubleshooting.md        # 常见问题排查
-├── examples/                     # 示例项目
-│   └── url-shortener/            # 完整项目产出示例
-├── CONTRIBUTING.md               # 贡献指南
-├── README.md                     # 英文
-├── README.zh.md                  # 中文
-├── README.ja.md                  # 日本語
-├── LICENSE                       # MIT
-└── .gitignore
-```
-
-## 对比
-
-### 为什么不是 Devin？
-
-Devin 是一个超强的单 Agent 开发者，擅长快速写代码。但它只有**一个角色**——没有产品审查、没有安全审计、没有 QA 测试、没有部署回滚。
-
-Rigor 是**12 个角色按标准软件工程流程协作**，交付的是**工程质量**，不只是写代码速度。
-
-### 为什么不是 Cursor？
-
-Cursor 是优秀的 AI 编程助手，辅助**你**写代码。但它不能自主协作——你需要自己决定架构、自己写测试、自己审查。
-
-Rigor 是**自主协作的 AI 团队**——你输入需求，剩下全部交给 AI。
-
-## 任务管理实战 (Task Management)
-
-**场景**：假设你刚创建了一个任务 `t_123456`，内容是“开发一个 GitHub Trend 收集器”。
-
-### ✏️ 中途纠正任务
-你发现任务漏掉了“按 Star 数排序”的要求，而且 Agent 已经开始工作了。**千万别删任务，直接追加说明即可。**
-
-*   **追加评论（推荐）**：Agent 会在约 60 秒后的调度周期自动读取评论并修正行为。
-    ```bash
-    # 示例：给运行中的任务增加“按 Star 倒序”的要求
-    hermes kanban comment t_123456 "纠正：请按照 Star 数从多到少倒序排列仓库。另外，页面主题色改为深蓝色。"
-    ```
-*   **更新描述**：直接修改任务卡片内容（源头覆盖）。
-    ```bash
-    hermes kanban update t_123456 --body "新的完整描述..."
-    ```
-
-### 🛑 停止或重置任务
-如果任务卡死了、API 疯狂报错，或者你想停止它省钱：
-
-*   **停止 (Block)**：冻结任务，阻止所有子任务继续执行。
-    ```bash
-    hermes kanban block t_123456 "停止原因：API 限流报错"
-    ```
-*   **重置 (Reset)**：将任务退回到 `todo` 状态，允许重试（适合解决临时性故障后重新跑）。
-    ```bash
-    hermes kanban reset t_123456
-    ```
-*   **归档 (Archive)**：从默认列表中隐藏任务（适合清理看板，数据保留）。
-    ```bash
-    hermes kanban archive t_123456
-    ```
-
-### 🧹 一键清理已完成任务
-为了保持看板列表整洁，你可以一键归档所有 `done` 状态的任务：
-```bash
-hermes kanban list --status done | grep -oE 't_[a-f0-9]+' | xargs -I {} hermes kanban archive {}
-```
-
-### 📜 查看历史归档
-```bash
-hermes kanban list --archived
-```
-
-## 知识库
-
-Rigor 包含结构化知识库，用于跨项目经验复用：
-
-- **knowledge-index.json** — 6 条知识条目，含标签、68 个同义词、置信度和相关度规则
-- **effectiveness.json** — 追踪每条知识实际防止了多少次问题，含自动衰减规则（30 天未用 → declining、60 天 → stale、180 天 → archived）
-- **project-profiles.json** — 根据项目类型和激活角色自动注入相关知识
-- **edges.json** — 知识关系图谱（决策 → Bug → 修复 → 模式）
-
-## Roadmap
-
-- [x] 12 角色 SOUL.md + 协作流程
-- [x] TDD 优先模式（QA 先写测试）
-- [x] 覆盖率门禁（行≥80%、分支≥70%）
-- [x] Artifact 版本管理
-- [x] 自我修正闭环（自动修复 + 人工升级协议）
-- [x] 结构化知识库（索引 + 语义检索 + 衰减机制）
-- [x] 项目仪表盘 + 任务状态报告
-- [x] 项目复盘 + 历史档案
-- [x] 部署回滚协议
-- [x] 增量更新模式
-- [x] 代码风格统一（ruff / prettier / eslint）
-- [ ] 更多垂直领域角色（金融、医疗、法律）
-- [ ] 自定义角色创建指南
-- [ ] Web Dashboard 集成
-- [ ] 多语言 SOUL.md 支持
-
-## 日常维护
-
-### 🧹 一键清理已完成任务
-为了保持看板列表整洁，你可以**一键归档**所有 `done` 状态的任务。这会让它们从默认列表中隐藏，但数据保留在数据库中（通过 `--archived` 仍可找回）。
-
-```bash
-hermes kanban list --status done | grep -oE 't_[a-f0-9]+' | xargs -I {} hermes kanban archive {}
-```
-
-### 📜 查看历史归档
-```bash
-hermes kanban list --archived
+# 3. 启动 TUI 仪表盘
+rigor tui
 ```
 
 ---
 
-## 贡献
+## 📖 使用指南
 
-欢迎贡献！
+### 🚀 交互式仪表盘
+启动实时监控界面：
+```bash
+rigor tui
+```
 
-- **添加新角色**: Fork → 创建 `profiles/<role>/SOUL.md` → PR
-- **改进现有角色**: 编辑 `profiles/<role>/SOUL.md` → PR
-- **添加知识条目**: 更新 `knowledge-base/` → PR
-- **报告 Bug**: Issues 或 PR 都欢迎
+### 🛠️ 环境配置
+自主配置项目环境 (依赖 + 环境变量 + 数据库)：
+```bash
+rigor setup -d /path/to/project
+```
 
-## 许可证
+### 🔄 CI/CD Webhook 监听
+启动监听服务以启用 Auto-Fix 循环：
+```bash
+rigor webhook --port 9999
+```
+*将你的 GitHub/GitLab Webhook 指向 `http://your-server:9999`。*
 
-MIT — 详见 [LICENSE](LICENSE)
+### 🧠 知识管理
+索引你的 Obsidian 库并搜索上下文：
+```bash
+# 索引 vault 中的所有 markdown 文件
+rigor knowledge --vault ./my-knowledge-base
+
+# 搜索特定模式
+rigor knowledge "如何实现用户认证"
+```
+
+### 📝 项目脚手架
+生成带有 SDD 模板的新项目结构：
+```bash
+rigor init my-new-api
+```
+
+### 🛡️ 安全与质量
+扫描依赖漏洞：
+```bash
+rigor scan
+```
+
+### 📊 报告生成
+生成每日或每周进度报告：
+```bash
+rigor report daily
+rigor report weekly
+```
 
 ---
 
-⭐ 如果 Rigor 对你有帮助，请给个 ⭐ 鼓励一下！
+## 🏗️ 架构
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                        Rigor CLI / TUI                           │
+├───────────────────────┬──────────────────────┬───────────────────┤
+│    🧠 Agent 核心      │    🔄 自动化         │    📦 集成       │
+│ - Hermes Profiles     │ - Auto-Fix Loop      │ - GitHub/GitLab   │
+│ - SOUL.md 配置        │ - 环境配置 (5 层)    │ - Webhook Server  │
+│ - Kanban 执行器       │ - CI/CD Webhooks     │ - Docker          │
+├───────────────────────┴──────────────────────┴───────────────────┤
+│    💾 数据层                                                     │
+│ - SQLite Kanban DB     - RAG 知识库 (FTS5)                       │
+│ - Session 日志         - Artifact 注册表                         │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+## 🗺️ 路线图
+
+- [x] **Phase 0**: 12 角色团队, SDD/TDD, Kanban
+- [x] **Phase 1**: Python CLI, 多 Git 平台支持, TUI 仪表盘, CI/CD Webhooks
+- [x] **Phase 2**: Auto-Fix 自愈循环, 自主环境配置, RAG 知识库
+- [ ] **Phase 3**: VS Code Extension, 浏览器 Agent 集成 (E2E 测试)
+- [ ] **Phase 4**: 企业级特性 (SSO, 审批流, 多项目隔离)
+
+## 🤝 贡献
+
+欢迎提交 PR！请阅读 [贡献指南](CONTRIBUTING.md)。
+
+## 📄 许可证
+
+本项目采用 MIT 许可证 — 详见 [LICENSE](LICENSE) 文件。
