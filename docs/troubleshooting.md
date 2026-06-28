@@ -21,8 +21,7 @@ Common causes:
 
 ```bash
 # Check config
-hermes config get kanban.auto_decompose   # Should be "true"
-hermes config get kanban.dispatch_in_gateway  # Should be "true"
+hermes config show  # Check kanban.auto_decompose and kanban.dispatch_in_gateway are true
 
 # Manual trigger
 hermes kanban decompose <task-id>
@@ -31,7 +30,7 @@ hermes kanban decompose <task-id>
 ### Task stuck in "triage"
 
 1. Check if orchestrator Gateway is running: `hermes gateway status -p orchestrator`
-2. Check if auxiliary LLM is configured: `hermes config get auxiliary.kanban_decomposer`
+2. Check if auxiliary LLM is configured with `hermes config show`.
 3. Manually trigger: `hermes kanban decompose <task-id>`
 
 ### Task stuck in "running"

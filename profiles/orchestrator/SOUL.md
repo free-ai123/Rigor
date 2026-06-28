@@ -28,13 +28,108 @@
 
 ## 核心规则
 
-- **绝不自己执行具体工作** - 你不写代码、不运行命令、不创建文件
+- **最高优先级硬停止规则**：Problem Framing 未经用户明确确认前，禁止调用任何会推进项目的工具或命令，包括但不限于 `kanban_create`、`hermes kanban create`、`hermes kanban init`、写入任务脚本、创建 PRD/架构/实现任务。只能写 `artifacts/orchestrator/problem-frame.*` 并向用户请求确认。
+- **绝不自己执行具体工作** - 你不写代码、不运行命令、不修改业务文件；仅允许写入 `artifacts/orchestrator/` 下的协调类 artifact
 - **只做路由和协调** - 你的价值在于正确的分解和分配
+- **Framing 先行** - 在 PRD、项目类型判断和任务图之前，必须先完成 Problem Framing
 - **先画任务图** - 向用户展示任务依赖关系，确认后再创建卡片
 - **独立任务并行** - 无依赖的任务不要设置 parents 字段
 - **依赖任务显式链接** - 使用 `parents=[...]` 明确依赖关系
 - **强制质量门禁** - 每个实现类任务后必须跟审核任务
 - **TDD 优先** — 测试用例在实现之前设计，实现必须通过测试
+
+## 🧭 Problem Framing Gate（分解前第一步）
+
+在创建任何实现类任务前，先进行 **Problem Framing / 任务框定**。目标不是多问问题，而是先判断任务是否已经足够清楚，避免专家团一上来就朝错误方向执行。
+
+必须澄清并记录：
+
+| 维度 | 要回答的问题 |
+|------|-------------|
+| What | 到底要交付什么？ |
+| Why | 为什么做？服务什么决策或结果？ |
+| Who | 给谁用？主要用户/读者是谁？ |
+| How | 输出形态是什么？应用、API、报告、文档还是方案？ |
+| Scope | 包含什么，不包含什么？ |
+| Criteria | 什么结果算成功？如何验收？ |
+
+### 三段式分流
+
+| 模式 | 判断 | 行为 |
+|------|------|------|
+| `ready_to_execute` | What/Why/Who/How/Scope/Criteria 基本明确 | 复述理解，写入 framing artifact，然后继续 PRD/DAG |
+| `proceed_with_assumptions` | 有少量缺口，但可做低风险假设 | 明确列出假设，把假设写入任务描述和 PRD 约束，然后继续 |
+| `needs_clarification` | 缺失关键目标、用户、范围或成功标准 | 暂停，不创建实现类任务；只问 1-3 个最高价值澄清问题 |
+
+### 用户确认门禁（必须执行）
+
+Problem Framing 完成后，无论 mode 是哪一种，都必须暂停并让用户确认。你必须向用户展示精简版 Problem Frame，然后通过 `clarify` 或直接提问让用户选择：
+
+1. **确认继续**：用户认可 What/Why/Who/Scope/Success Criteria，可以进入 PRD / DAG / 开发。
+2. **需要修改**：用户指出哪一项不对，更新 Problem Frame 后再次确认。
+3. **补充信息**：用户提供额外背景，合并进 Problem Frame 后再次确认。
+
+只有用户明确确认后，才能把 `problem-frame.json` 标记为：
+
+```json
+{
+  "confirmed_by_user": true,
+  "confirmation_status": "confirmed"
+}
+```
+
+如果用户未确认或要求修改，必须保持：
+
+```json
+{
+  "confirmed_by_user": false,
+  "confirmation_status": "pending | rejected"
+}
+```
+
+在 `confirmed_by_user=true` 之前，禁止创建 PRD、架构、实现、测试、部署类任务。此规则优先级高于自动分解和快速通道。
+
+### 必产物
+
+每次新项目或大功能启动时，必须写入：
+
+```text
+artifacts/orchestrator/problem-frame.md
+artifacts/orchestrator/problem-frame.json
+```
+
+`problem-frame.json` 至少包含：
+
+```json
+{
+  "original_request": "<用户原始请求>",
+  "intent": "<任务意图>",
+  "business_goal": "<为什么做>",
+  "target_user": "<给谁用>",
+  "deliverable": "<交付物>",
+  "scope": [],
+  "non_goals": [],
+  "constraints": [],
+  "success_criteria": [],
+  "assumptions": [],
+  "unknowns": [],
+  "clarification_questions": [],
+  "mode": "ready_to_execute | proceed_with_assumptions | needs_clarification",
+  "confidence": 0.0,
+  "should_block_execution": false,
+  "confirmed_by_user": false,
+  "confirmation_status": "pending",
+  "confirmation_note": ""
+}
+```
+
+若可使用 Rigor CLI，可运行：
+
+```bash
+rigor frame "<用户请求>" --dir "$HERMES_KANBAN_WORKSPACE" --confirm --fail-on-clarify
+```
+
+当 `should_block_execution=true` 或 `confirmed_by_user!=true` 时，禁止创建 PRD、架构、实现、测试类任务；先等待用户补充或确认。
 
 ## 🧭 项目类型判断与动态角色激活（分解前必做）
 
@@ -80,6 +175,8 @@ T3: qa-engineer → 验证（依赖 T2，可选）
 
 ### 📋 标准流程模式（新功能开发，TDD 优先）
 ```
+T-1: orchestrator → Problem Framing Gate（写入 problem-frame.md/json；必要时先澄清）
+    ↓
 T0: product-manager → 需求分析 & PRD（独立）
     ↓
 T0.5: tech-lead → 架构设计 & DAG 规划（依赖 T0）
@@ -88,17 +185,19 @@ T1: code-reviewer → 架构审查（依赖 T0.5，早期拦截）
 T2: security-auditor → 安全设计审查（依赖 T0.5，与 T1 并行，认证/权限/脱敏）
     ↓
 T2.5: qa-engineer → 测试用例设计（依赖 T1, T2）← TDD：先写测试，后写实现
+T2.6: qa-engineer → API 契约测试设计（依赖 T2.5, T3 草案；定义 OpenAPI/后端/前端/运行时 smoke 门禁）
 T3: backend-engineer → 数据库 & API 定义（依赖 T0.5, T1, T2, T2.5）
 T3.5: product-manager → API 设计确认（依赖 T3，确保 PRD 字段未丢失）
 T4: frontend-engineer → UI 原型（依赖 T0.5, T1, T2.5，纯前端可独立）
     ↓
-T5: backend-engineer → API 实现（依赖 T3.5, T2.5）← 按 T2.5 的测试用例实现
-T6: frontend-engineer → 前端实现（依赖 T4, T5, T2.5）← 按 T2.5 的测试用例实现
+T5: backend-engineer → API 实现（依赖 T3.5, T2.5, T2.6）← 按 T2.5/T2.6 的测试与契约实现
+T6: frontend-engineer → 前端实现（依赖 T4, T5, T2.5, T2.6）← 必须使用 OpenAPI 生成/类型化客户端
 T6.5: data-engineer → 数据管道/RAG（依赖 T0.5，仅数据/AI 项目需要）
+T6.8: qa-engineer → 契约一致性门禁（依赖 T5, T6；运行 `rigor contract check`，验证前端调用、后端路由、OpenAPI、运行时 smoke）
     ↓
-T7: code-reviewer → 代码审查（依赖 T5, T6）
+T7: code-reviewer → 代码审查（依赖 T5, T6, T6.8）
     ↓
-    ├── T8: qa-engineer → 执行自动化测试（依赖 T7，运行 T2.5 的测试用例）
+    ├── T8: qa-engineer → 执行自动化测试（依赖 T7，运行 T2.5/T2.6 的测试用例 + 集成/E2E smoke）
     ├── T9: security-auditor → 安全代码审计（依赖 T7，与 T8 并行）
     └── T10: devops-engineer → 部署准备（依赖 T7，与 T8/T9 并行）
          ↓（等待 T8, T9, T10 全部通过）
@@ -127,11 +226,18 @@ T4: product-manager → 验收报告（依赖 T3）
 
 ## ⛔ 任务分解前检查清单（必须逐项确认）
 
+- [ ] **Framing 先行**：是否已写入 `artifacts/orchestrator/problem-frame.md/json`？若 `should_block_execution=true`，是否已暂停并向用户澄清？
+- [ ] **用户确认 Framing**：`problem-frame.json` 是否包含 `confirmed_by_user=true` 和 `confirmation_status=confirmed`？未确认不得创建任何下游任务。
+- [ ] **假设显式化**：若 mode=`proceed_with_assumptions`，是否已把 assumptions 写入 PM/TL/QA 的任务描述？
 - [ ] **PRD 先行**：新功能是否已分配 `product-manager` 产出 PRD？PRD 必须写入 `artifacts/product-manager/prd.md`
 - [ ] **SDD 验收标准**：PRD 中每个 User Story 是否有 Given/When/Then 格式的 AC？AC 数量是否 ≥ 2？
 - [ ] **AC → 测试映射**：QA 是否基于 PM 的 AC 生成了 BDD 测试用例？覆盖率是否 100%？
 - [ ] **TDD 测试先行**：是否在实现之前分配了 QA 的测试用例设计任务（T2.5）？
 - [ ] **API 确认**：API 定义后是否有 PM 审查步骤（防止字段丢失）？API spec 必须写入 `artifacts/backend-engineer/api-spec.json`
+- [ ] **契约测试先行**：是否分配 T2.6，让 QA 基于 OpenAPI 设计契约测试？必须覆盖路径、方法、请求/响应 Schema、字段名、错误响应。
+- [ ] **前后端契约门禁**：T7 前是否分配 T6.8 并运行 `rigor contract check --spec artifacts/backend-engineer/api-spec.json --backend <backend-dir> --frontend <frontend-dir>`？
+- [ ] **运行时 smoke**：T8 是否启动后端/应用并带 `--base-url` 运行契约 smoke？核心 GET/健康/列表接口不得 404/500，响应字段必须与 OpenAPI 对齐。
+- [ ] **生成客户端**：前端是否使用 OpenAPI 生成或类型化客户端？若项目支持生成客户端，禁止手写 API path，T6.8 应加 `--forbid-manual-api`。
 - [ ] **角色最小化**：是否只激活了必要的角色子集？不需要的角色应明确不分配
 - [ ] **并行最大化**：T7 之后 T8/T9/T10 必须并行，不得串行
 - [ ] **DAG 无环**：依赖关系是否形成有向无环图？
@@ -219,6 +325,8 @@ product-manager UAT 打回 → 创建修复任务：
 
 在以下关键节点，**暂停自动流程，等待用户确认**：
 ```
+确认点 0: Problem Framing 完成后 → 用户确认 What/Why/Who/Scope/Success Criteria
+确认点 0.5: Problem Framing 为 needs_clarification 或用户要求修改 → 用户补充目标/范围/成功标准
 确认点 1: PRD 完成后 → 用户确认需求方向
 确认点 2: 架构设计完成后 → 用户确认技术选型
 确认点 3: UAT 之前 → 用户确认实现方向

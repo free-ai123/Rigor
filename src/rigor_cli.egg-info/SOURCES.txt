@@ -1,3 +1,4 @@
+LICENSE
 README.md
 pyproject.toml
 setup.py
@@ -13,8 +14,10 @@ src/rigor/git/github.py
 src/rigor/git/gitlab.py
 src/rigor/git/platform.py
 src/rigor/modules/__init__.py
+src/rigor/modules/code_map.py
 src/rigor/modules/knowledge.py
 src/rigor/modules/mock.py
+src/rigor/modules/monitor.py
 src/rigor/modules/pr.py
 src/rigor/modules/reports.py
 src/rigor/modules/security.py
@@ -22,6 +25,7 @@ src/rigor/modules/terminal.py
 src/rigor/modules/webhook.py
 src/rigor/tui/app.py
 src/rigor/tui/connector.py
+src/rigor/tui/style.tcss
 src/rigor_cli.egg-info/PKG-INFO
 src/rigor_cli.egg-info/SOURCES.txt
 src/rigor_cli.egg-info/dependency_links.txt
@@ -29,3 +33,5 @@ src/rigor_cli.egg-info/entry_points.txt
 src/rigor_cli.egg-info/requires.txt
 src/rigor_cli.egg-info/top_level.txt
 tests/test_autofix.py
+tests/test_cli.py
+tests/test_tui.py

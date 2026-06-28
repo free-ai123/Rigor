@@ -2,8 +2,10 @@
 
 import json
 import os
+import re
 from typing import Any
 
+import yaml
 from rich.console import Console
 
 console = Console()
@@ -15,12 +17,13 @@ def parse_api_spec(spec_path: str) -> list[dict[str, Any]]:
         console.print(f"[red]❌ 找不到 API spec: {spec_path}[/]")
         return []
 
-    with open(spec_path) as f:
+    with open(spec_path, encoding="utf-8") as f:
         if spec_path.endswith(".json"):
             spec = json.load(f)
+        elif spec_path.endswith((".yaml", ".yml")):
+            spec = yaml.safe_load(f) or {}
         else:
-            # YAML 需要 pyyaml，此处简化处理
-            console.print("[yellow]⚠️  YAML 解析需要安装 pyyaml，尝试 JSON 格式[/]")
+            console.print("[yellow]⚠️  仅支持 JSON/YAML OpenAPI spec[/]")
             return []
 
     endpoints = []
@@ -37,7 +40,7 @@ def parse_api_spec(spec_path: str) -> list[dict[str, Any]]:
 
             # 生成 mock 数据
             mock_data = {}
-            for media_type, schema_info in content.items():
+            for schema_info in content.values():
                 schema = schema_info.get("schema", {})
                 mock_data = _generate_mock_from_schema(schema)
 
@@ -116,12 +119,12 @@ def generate_mock_server(spec_path: str, output_dir: str = "./mock-server", fram
         code = _generate_flask_mock(endpoints)
 
     output_file = os.path.join(output_dir, "mock_server.py")
-    with open(output_file, "w") as f:
+    with open(output_file, "w", encoding="utf-8") as f:
         f.write(code)
 
     # 生成 requirements.txt
     req_file = os.path.join(output_dir, "requirements.txt")
-    with open(req_file, "w") as f:
+    with open(req_file, "w", encoding="utf-8") as f:
         f.write("flask>=2.3\n" if framework == "flask" else "fastapi>=0.100\nuvicorn>=0.23\n")
 
     console.print("\n[green]✅ Mock Server 已生成![/]")
@@ -130,6 +133,15 @@ def generate_mock_server(spec_path: str, output_dir: str = "./mock-server", fram
     console.print(f"  启动: python {output_file}\n")
 
     return output_file
+
+
+def _function_name(method: str, path: str) -> str:
+    cleaned = re.sub(r"\W+", "_", path.strip("/") or "root").strip("_")
+    return f"mock_{method}_{cleaned or 'root'}"
+
+
+def _flask_path(path: str) -> str:
+    return re.sub(r"\{([^}/]+)\}", r"<\1>", path)
 
 
 def _generate_flask_mock(endpoints: list[dict[str, Any]]) -> str:
@@ -145,8 +157,8 @@ def _generate_flask_mock(endpoints: list[dict[str, Any]]) -> str:
     for ep in endpoints:
         method = ep["method"].lower()
         path = ep["path"]
-        decorator = f'@app.route("{path}", methods=["{ep["method"]}"])'
-        func_name = f"mock_{method}_{path.strip('/').replace('/', '_').replace('-', '_')}"
+        decorator = f'@app.route("{_flask_path(path)}", methods=["{ep["method"]}"])'
+        func_name = _function_name(method, path)
 
         lines.append(decorator)
         lines.append(f"def {func_name}():")
@@ -174,7 +186,7 @@ def _generate_fastapi_mock(endpoints: list[dict[str, Any]]) -> str:
     for ep in endpoints:
         method = ep["method"].lower()
         path = ep["path"]
-        func_name = f"mock_{method}_{path.strip('/').replace('/', '_').replace('-', '_')}"
+        func_name = _function_name(method, path)
 
         lines.append(f'@app.{method}("{path}")')
         lines.append(f"def {func_name}():")

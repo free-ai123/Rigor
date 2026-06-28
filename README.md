@@ -7,7 +7,7 @@
 </div>
 
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.6%2B-3776AB)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB)](https://www.python.org/)
 [![Framework](https://img.shields.io/badge/Built%20on-Hermes%20Agent-2b6cb0)](https://hermes-agent.nousresearch.com/)
 
 ## 🚀 Overview
@@ -29,11 +29,11 @@ Rigor doesn't just write code; it fixes it.
 - **Smart Task Creation**: Generates repair tasks with error context and assigns them to the correct agent.
 - **Webhook Integration**: Listens to GitHub/GitLab events in real-time.
 
-#### 🖥️ Real-time TUI Dashboard
-Monitor your AI team in a `k9s`-style terminal interface:
-- **Live Kanban**: Watch tasks move from TODO → DONE.
-- **Agent Status Matrix**: See who is working, idle, or blocked.
-- **Cost & Token Tracking**: Real-time monitoring of AI resource usage.
+#### 💬 Orchestrator Chat First
+Use Hermes' native orchestrator profile as the primary control surface:
+- **Stable interaction**: Talk directly to the orchestrator in the standard Hermes chat CLI.
+- **Chinese input friendly**: Avoid custom terminal widgets and rely on the shell/terminal input path.
+- **Expert routing**: Ask the orchestrator to analyze, plan, create Kanban tasks, and delegate to specialist roles.
 
 #### 🛠️ 5-Layer Autonomous Environment Setup
 Agents can configure their own execution environment:
@@ -47,7 +47,6 @@ Agents can configure their own execution environment:
 Seamless integration with your workflow:
 - **GitHub** (API v3)
 - **GitLab** (API v4)
-- **Gitea** / Gitee
 - **Auto-Detection**: Rigor automatically detects your remote origin.
 
 #### 🔍 RAG Knowledge Base
@@ -57,39 +56,71 @@ Build a long-term memory for your team:
 - **Context Injection**: Agents automatically load relevant past decisions and patterns.
 
 #### 🛡️ SDD + TDD Hybrid Workflow
+- **Problem Framing Gate**: The orchestrator clarifies What/Why/Who/Scope/Success Criteria before creating implementation work.
 - **Story-Driven (SDD)**: PM writes User Stories with Given/When/Then Acceptance Criteria.
 - **Test-Driven (TDD)**: QA converts AC into BDD tests before implementation begins.
+- **Contract-Driven API Gate**: `rigor contract check` compares OpenAPI, backend routes, frontend calls, and optional live HTTP smoke so the built app can actually run through core functions.
 
 ---
 
 ## 📦 Installation
 
 ### Prerequisites
-- **Python 3.6+**
-- **Hermes Agent**: Rigor is built on top of Hermes Agent for profile management and Kanban execution. [Install Hermes](https://hermes-agent.nousresearch.com/docs/)
+- **Python 3.10+**
+- **Hermes Agent**: optional before bootstrap. The bootstrap script can launch the bundled Hermes team setup for you.
 
 ### Quick Start
 
 ```bash
-# 1. Clone the repository
 git clone https://github.com/free-ai123/Rigor.git
 cd Rigor
-
-# 2. Install dependencies
-pip install -e ".[dev]"
-
-# 3. Launch the TUI Dashboard
-rigor tui
+bash scripts/bootstrap.sh
 ```
+
+The bootstrap command creates `.venv`, installs Rigor with runtime and security tooling, and runs the Hermes expert-team setup. For CLI-only installation:
+
+```bash
+bash scripts/bootstrap.sh --skip-hermes
+```
+
+For contributor tooling and the deprecated custom TUI dependencies:
+
+```bash
+bash scripts/bootstrap.sh --dev
+```
+
+Run the CLI after bootstrap:
+
+```bash
+source .venv/bin/activate
+rigor chat
+
+# Or without activating the virtualenv:
+./scripts/rigor.sh chat
+```
+
+If you open a new terminal, activate `.venv` again before using the plain `rigor` command, or keep using `./scripts/rigor.sh`.
+
+`rigor chat` launches the Rigor `orchestrator` Hermes profile and automatically syncs the user's current Hermes login/provider/model into that profile first. The old `rigor tui` command is kept only as a deprecated compatibility alias and now forwards to the same chat flow.
 
 ---
 
 ## 📖 Usage
 
-### 🚀 Interactive Dashboard
-Launch the real-time monitoring interface:
+### 🚀 Orchestrator Chat
+Launch the primary interactive interface:
 ```bash
-rigor tui
+./scripts/rigor.sh chat
+```
+
+Run a one-shot prompt:
+```bash
+./scripts/rigor.sh chat "Analyze this project and propose the next maintenance tasks"
+```
+
+Skip profile sync only when you explicitly want to use isolated profile-specific config:
+```bash
+./scripts/rigor.sh chat --no-sync-profile
 ```
 
 ### 🛠️ Environment Setup
@@ -126,12 +157,43 @@ rigor knowledge "how to implement auth"
 Generate a new project structure with SDD templates:
 ```bash
 rigor init my-new-api
+# Creates ~/projects/my-new-api by default
+
+rigor init my-new-api --dir ~/projects/custom-api
+rigor init my-new-api --projects-dir ~/work
+```
+
+### 🧭 Problem Framing
+Clarify and confirm the task before PRD, architecture, or implementation:
+```bash
+rigor frame "Build a URL shortener for internal marketing campaigns" --dir ~/projects/my-new-api --confirm
+```
+
+This writes:
+```text
+artifacts/orchestrator/problem-frame.md
+artifacts/orchestrator/problem-frame.json
 ```
 
 ### 🛡️ Security & Quality
 Scan for dependency vulnerabilities:
 ```bash
 rigor scan
+```
+
+Verify API contracts across OpenAPI, backend routes, frontend calls, and a live backend:
+```bash
+rigor contract check \
+  --spec artifacts/backend-engineer/api-spec.json \
+  --backend src/server \
+  --frontend src \
+  --base-url http://localhost:8000
+```
+
+### 🗺️ Code Map
+Generate a compact Python symbol map for agent context selection:
+```bash
+rigor code-map --dir .
 ```
 
 ### 📊 Reporting
@@ -147,7 +209,7 @@ rigor report weekly
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│                        Rigor CLI / TUI                           │
+│                  Rigor CLI / Orchestrator Chat                   │
 ├───────────────────────┬──────────────────────┬───────────────────┤
 │    🧠 Agent Core      │    🔄 Automation     │    📦 Integrations │
 │ - Hermes Profiles     │ - Auto-Fix Loop      │ - GitHub/GitLab   │
@@ -163,7 +225,7 @@ rigor report weekly
 ## 🗺️ Roadmap
 
 - [x] **Phase 0**: 12-Role Team, SDD/TDD, Kanban
-- [x] **Phase 1**: Python CLI, Multi-Git, TUI Dashboard, CI/CD Webhooks
+- [x] **Phase 1**: Python CLI, Multi-Git, Orchestrator Chat, CI/CD Webhooks
 - [x] **Phase 2**: Auto-Fix Loop, Autonomous Env Setup, RAG Knowledge Base
 - [ ] **Phase 3**: VS Code Extension, Browser Agent Integration (E2E)
 - [ ] **Phase 4**: Enterprise Features (SSO, Approval Workflows, Multi-Project)

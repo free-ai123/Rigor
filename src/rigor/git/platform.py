@@ -1,4 +1,4 @@
-"""多 Git 平台抽象层 — 统一 GitHub / GitLab / Gitea 接口"""
+"""多 Git 平台抽象层 — 统一 GitHub / GitLab 接口"""
 
 from abc import ABC, abstractmethod
 from typing import Any
@@ -63,8 +63,6 @@ def detect_platform(repo_url: str = None) -> str:
 
     if "gitlab" in repo_url.lower():
         return "gitlab"
-    elif "gitea" in repo_url.lower() or "gitee" in repo_url.lower():
-        return "gitea"
     elif "github" in repo_url.lower():
         return "github"
     return "unknown"

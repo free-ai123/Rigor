@@ -41,25 +41,26 @@ def get_diff_stats(days: int = 1, project_dir: str = ".") -> dict[str, Any]:
     """获取最近 N 天的代码变更统计"""
     since = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
     result = subprocess.run(
-        ["git", "diff", f"--since={since}", "--shortstat"], capture_output=True, text=True, timeout=10, cwd=project_dir
+        ["git", "log", f"--since={since}", "--numstat", "--pretty=format:"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        cwd=project_dir,
     )
 
-    # 解析 --shortstat 输出: "X files changed, Y insertions(+), Z deletions(-)"
     stats = {"files": 0, "insertions": 0, "deletions": 0}
-    output = result.stdout.strip()
-    if output:
-        import re
-
-        m = re.search(r"(\d+) files? changed", output)
-        if m:
-            stats["files"] = int(m.group(1))
-        m = re.search(r"(\d+) insertions?", output)
-        if m:
-            stats["insertions"] = int(m.group(1))
-        m = re.search(r"(\d+) deletions?", output)
-        if m:
-            stats["deletions"] = int(m.group(1))
-
+    changed_files: set[str] = set()
+    for line in result.stdout.splitlines():
+        parts = line.split("\t")
+        if len(parts) != 3:
+            continue
+        added, deleted, filename = parts
+        changed_files.add(filename)
+        if added.isdigit():
+            stats["insertions"] += int(added)
+        if deleted.isdigit():
+            stats["deletions"] += int(deleted)
+    stats["files"] = len(changed_files)
     return stats
 
 

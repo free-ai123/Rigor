@@ -48,11 +48,13 @@ cp profiles/SOUL-TEMPLATE.md profiles/new-role/SOUL.md
 
 ## 🔄 角色间协作协议
 
-- **SDD 工作流**: PM 输出 User Story + Acceptance Criteria (Given/When/Then) → QA 基于 AC 生成 BDD 测试 → 工程师按 TDD 实现
+- **SDD/TDD/契约工作流**: PM 输出 User Story + Acceptance Criteria (Given/When/Then) → QA 基于 AC 生成 BDD 测试和 API 契约测试 → 工程师按测试与契约实现
+- **Problem Framing 先行并确认**: Orchestrator 在 PRD/DAG 前写入 `artifacts/orchestrator/problem-frame.md/json`，并取得用户确认；未 `confirmed_by_user=true` 不得创建实现任务
 - **AC → 测试映射**: QA 的测试用例必须 1:1 覆盖 PM 交付的所有 AC
+- **API 契约门禁**: OpenAPI、后端真实路由、前端真实调用、运行时 smoke 必须一致；优先使用 `rigor contract check`
 - **Artifact 传递链**: 每个角色消费上游 artifacts → 产出自身 artifacts
 - **结构化通信**: 使用 `kanban_comment` 发送 JSON 格式的结构化消息
-- **质量门禁**: QA + Security + Code Reviewer 三道防线
+- **质量门禁**: Contract Check + QA + Security + Code Reviewer 四道防线
 - **Multi-Agent Debate**: 审查分歧时触发三方辩论（engineer + reviewer + tech-lead）
 - **自我修正闭环**: 失败自动重试（最多 3 次），超过后触发人工干预
 

@@ -79,6 +79,9 @@ Roles communicate through a shared workspace directory:
 ```
 $HERMES_KANBAN_WORKSPACE/
 ├── artifacts/
+│   ├── orchestrator/
+│   │   ├── problem-frame.md          # What/Why/Who/Scope/Criteria summary
+│   │   └── problem-frame.json        # Machine-readable framing gate
 │   ├── product-manager/
 │   │   ├── prd.md                    # Requirements doc
 │   │   └── user-stories.json         # Structured user stories
@@ -138,10 +141,14 @@ Each role runs as an independent Hermes Gateway process:
 
 ### Artifact Chain Flow
 ```
-PM writes PRD → TechLead writes DAG + contracts
+Orchestrator writes and gets user confirmation for Problem Frame (What/Why/Who/Scope/Criteria)
+  → PM writes PRD from Problem Frame
+  → TechLead writes DAG + contracts
   → Backend writes API spec (reads PRD + contracts)
   → Frontend writes components (reads PRD + API spec)
-  → QA writes tests (reads PRD + API spec)
+  → QA writes BDD + API contract tests (reads PRD + API spec)
+  → Contract gate checks OpenAPI vs backend routes vs frontend calls
+  → QA runs runtime smoke against the live backend/application
   → Security audits (reads PRD + API spec + contracts)
   → DevOps deploys (reads API spec + contracts)
   → PM does UAT (reads PRD + all artifacts)
@@ -175,9 +182,11 @@ Reviewer finds defect → Creates fix task (assignee=original author)
 
 | Gate | Condition | Action on Failure |
 |------|-----------|------------------|
+| Problem Framing | What, Why, Who, Scope, and Success Criteria are clear enough and `confirmed_by_user=true` | Block → Ask for clarification or user confirmation |
+| Contract Check | OpenAPI, backend routes, frontend calls, and runtime smoke align | Block → Fix task → Re-check |
 | Code Review | No critical findings | Block → Fix task → Re-review |
 | Security Audit | 0 Critical/High vulnerabilities | Block → Fix task → Re-audit |
-| QA Test | 100% pass, line ≥ 80%, branch ≥ 70% | Block → Fix task → Re-test |
+| QA Test | 100% pass, line ≥ 80%, branch ≥ 70%, integration smoke passes | Block → Fix task → Re-test |
 | UAT | All PRD acceptance criteria met | Block → Fix task → Re-UAT |
 
 ## Observability

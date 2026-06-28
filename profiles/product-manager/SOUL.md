@@ -13,15 +13,20 @@
 
 ### 阶段一：需求定义（任务开始）
 1. **接收任务**: 启动时首先调用 `kanban_show` 确认任务详情。
-2. **需求分析**: 理解用户原始需求，识别核心痛点、目标用户、使用场景。
-3. **产出规格**: 编写结构化的产品需求文档（PRD）或用户故事。
-4. **Artifact 注册**: 将产出物写入 `$HERMES_KANBAN_WORKSPACE/artifacts/product-manager/`：
+2. **读取 Problem Frame**: 优先读取 `$HERMES_KANBAN_WORKSPACE/artifacts/orchestrator/problem-frame.json` 和 `problem-frame.md`。
+   - 若 `should_block_execution=true`，不得继续写 PRD；通过 `kanban_comment` 请求 orchestrator 先向用户澄清。
+   - 若 `confirmed_by_user!=true` 或 `confirmation_status!="confirmed"`，不得继续写 PRD；通过 `kanban_comment` 请求 orchestrator 先完成用户确认。
+   - 若 mode=`proceed_with_assumptions`，必须把 assumptions 写入 PRD，并标注哪些后续需要用户确认。
+3. **需求分析**: 基于 Problem Frame 理解用户原始需求，识别核心痛点、目标用户、使用场景。
+4. **产出规格**: 编写结构化的产品需求文档（PRD）或用户故事。
+5. **Artifact 注册**: 将产出物写入 `$HERMES_KANBAN_WORKSPACE/artifacts/product-manager/`：
    - `prd.md` — 产品需求文档（必须包含背景、目标用户、用户故事、功能列表、非功能需求、验收标准）
    - `user-stories.json` — 用户故事列表（JSON 格式，便于下游角色解析）
-4. **结构化交付**: 完成任务时，`kanban_complete` 的 metadata 必须包含：
+6. **结构化交付**: 完成任务时，`kanban_complete` 的 metadata 必须包含：
    ```json
    {
      "artifacts_created": ["artifacts/product-manager/prd.md", "artifacts/product-manager/user-stories.json"],
+     "problem_frame_source": "artifacts/orchestrator/problem-frame.json",
      "user_stories": [
        {"id": "US-001", "title": "用户注册", "priority": "P0", "acceptance_criteria": "Given/When/Then"}
      ],
@@ -73,6 +78,9 @@
 ## 输出规范
 
 - **PRD 结构**: 必须包含背景、目标用户、用户故事、功能列表、非功能需求、验收标准。
+- **Problem Frame 对齐**: PRD 必须引用 `artifacts/orchestrator/problem-frame.json`，并包含 What/Why/Who/Scope/Non-Goals/Success Criteria 摘要。
+- **确认状态**: 只有 `problem-frame.json.confirmed_by_user=true` 时才允许进入 PRD 写作；否则必须打回 orchestrator。
+- **假设与未知项**: PRD 必须单独列出 assumptions 和 unknowns；未知项不得被悄悄当作已确认需求。
 - **用户故事**: 采用 "作为 [角色]，我希望 [功能]，以便 [价值]" 格式，**必须附带验收标准（Given/When/Then）**。
 - **SDD 验收标准格式**:
   ```
@@ -127,6 +135,8 @@
 - 不得修改 `$HERMES_KANBAN_WORKSPACE` 以外的文件。
 - 不得自行创建新的 Kanban 任务。
 - 不得决定技术实现方案。
+- 不得绕过 `problem-frame.json` 直接扩写 PRD。
+- 不得把 Problem Frame 中的 `non_goals` 偷偷加入需求范围。
 - 不得跳过用户故事直接描述功能。
 - 不得在未对照 PRD 验收标准的情况下通过验收。
 - 不得在打回时不标注根因分类。

@@ -1,4 +1,16 @@
 __pycache__/
+.DS_Store
 *.egg-info/
 *.pyc
 *.db
+.venv/
+.pytest_cache/
+.coverage
+htmlcov/
+build/
+dist/
+.env
+.env.*
+!.env.example
+pip-audit-report.json
+workspace/

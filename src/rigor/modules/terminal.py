@@ -12,7 +12,7 @@ from rich.console import Console
 
 console = Console()
 
-# 允许执行的命令白名单
+# 允许执行的命令白名单。保持保守：网络、shell、删除和容器控制命令不默认开放。
 ALLOWED_COMMANDS = {
     "python",
     "python3",
@@ -32,10 +32,6 @@ ALLOWED_COMMANDS = {
     "gcc",
     "g++",
     "git",
-    "curl",
-    "wget",
-    "docker",
-    "docker-compose",
     "ls",
     "cat",
     "head",
@@ -50,17 +46,11 @@ ALLOWED_COMMANDS = {
     "echo",
     "touch",
     "mkdir",
-    "cp",
-    "mv",
-    "rm",
-    "chmod",
     "which",
     "uname",
     "env",
     "hermes",
     "rigor",
-    "bash",
-    "sh",
 }
 
 # 禁止的危险命令
@@ -74,6 +64,13 @@ DANGEROUS_PATTERNS = [
     r"curl.*\|\s*bash",  # Pipe curl to bash
     r"wget.*\|\s*sh",  # Pipe wget to sh
 ]
+
+BLOCKED_ARGUMENTS = {
+    "python": {"-c"},
+    "python3": {"-c"},
+    "find": {"-exec", "-delete"},
+    "git": {"reset", "clean", "checkout", "switch", "restore", "push"},
+}
 
 
 class AgentTerminal:
@@ -93,8 +90,15 @@ class AgentTerminal:
             if re.search(pattern, command, re.IGNORECASE):
                 return False, f"Dangerous pattern detected: {pattern}"
 
+        try:
+            parts = shlex.split(command)
+        except ValueError as e:
+            return False, f"Invalid command syntax: {e}"
+
+        if not parts:
+            return False, "Empty command"
+
         # Extract base command
-        parts = command.split()
         base_cmd = parts[0].lower()
 
         # Handle paths like /usr/bin/python
@@ -102,6 +106,10 @@ class AgentTerminal:
 
         if base_cmd not in ALLOWED_COMMANDS:
             return False, f"Command '{base_cmd}' not in allowed list"
+
+        blocked = BLOCKED_ARGUMENTS.get(base_cmd, set())
+        if any(part in blocked for part in parts[1:]):
+            return False, f"Command '{base_cmd}' contains blocked argument"
 
         return True, "OK"
 

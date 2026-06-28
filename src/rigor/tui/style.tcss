@@ -44,10 +44,10 @@ Screen {
 }
 
 #agent-grid {
-    height: auto;
+    height: 19;
     layout: grid;
-    grid-size: 2;
-    grid-columns: 1fr 1fr;
+    grid-size: 1;
+    grid-columns: 1fr;
     grid-rows: auto;
     margin-bottom: 1;
 }
@@ -56,11 +56,12 @@ Screen {
     width: 100%;
     height: 1;
     padding: 0 1;
-    border: tall $foreground 10%;
+    border: none;
+    content-align: left middle;
 }
 
 #kanban-table {
-    height: 12;
+    height: 10;
     background: $surface;
     margin-bottom: 1;
 }

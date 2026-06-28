@@ -46,11 +46,16 @@ ROLES=(
 )
 
 # --- Model Presets (best practices built-in) ---
-declare -A MODEL_PRESETS
-MODEL_PRESETS["1"]="anthropic/claude-sonnet-4|anthropic|ANTHROPIC_API_KEY|Anthropic"
-MODEL_PRESETS["2"]="openai/gpt-4o|openai|OPENAI_API_KEY|OpenAI"
-MODEL_PRESETS["3"]="deepseek/deepseek-chat|deepseek|DEEPSEEK_API_KEY|DeepSeek"
-MODEL_PRESETS["4"]="alibaba/qwen3.6-plus|alibaba|DASHSCOPE_API_KEY|Alibaba Qwen"
+# Keep this Bash 3 compatible for macOS' system /bin/bash.
+model_preset_for_choice() {
+    case "$1" in
+        1) printf "%s\n" "anthropic/claude-sonnet-4|anthropic|ANTHROPIC_API_KEY|Anthropic" ;;
+        2) printf "%s\n" "openai/gpt-4o|openai|OPENAI_API_KEY|OpenAI" ;;
+        3) printf "%s\n" "deepseek/deepseek-chat|deepseek|DEEPSEEK_API_KEY|DeepSeek" ;;
+        4) printf "%s\n" "alibaba/qwen3.6-plus|alibaba|DASHSCOPE_API_KEY|Alibaba Qwen" ;;
+        *) return 1 ;;
+    esac
+}
 
 # --- Logging ---
 log_info()    { echo -e "${BLUE}[INFO]${NC} $1"; }
@@ -76,6 +81,100 @@ prompt_yes_no() {
     case "$input" in
         [yY][eE][sS]|[yY]) return 0 ;;
         *) return 1 ;;
+    esac
+}
+
+get_existing_api_key() {
+    local env_var="$1"
+    local env_file="$HERMES_HOME/.env"
+    local value=""
+
+    value=$(printenv "$env_var" 2>/dev/null || true)
+    if [ -n "$value" ]; then
+        printf "%s\n" "$value"
+        return 0
+    fi
+
+    if [ -f "$env_file" ]; then
+        value=$(grep "^${env_var}=" "$env_file" 2>/dev/null | tail -1 | sed "s|^${env_var}=||" || true)
+        if [ -n "$value" ]; then
+            printf "%s\n" "$value"
+        fi
+    fi
+}
+
+is_configured_value() {
+    local value
+    value=$(printf "%s" "${1:-}" | tr '[:upper:]' '[:lower:]')
+    case "$value" in
+        ""|"not set"|"none"|"null"|"unknown")
+            return 1
+            ;;
+        *)
+            return 0
+            ;;
+    esac
+}
+
+read_config_value_from_file() {
+    local key="$1"
+    if [ ! -f "$CONFIG_FILE" ]; then
+        return 0
+    fi
+    python3 - "$CONFIG_FILE" "$key" <<'PY' 2>/dev/null || true
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+wanted = sys.argv[2]
+values = {}
+stack = []
+
+for raw_line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+    if not raw_line.strip() or raw_line.lstrip().startswith("#"):
+        continue
+    if raw_line.lstrip().startswith("- "):
+        continue
+    indent = len(raw_line) - len(raw_line.lstrip(" "))
+    stripped = raw_line.strip()
+    if ":" not in stripped:
+        continue
+    key, value = stripped.split(":", 1)
+    key = key.strip()
+    value = value.strip()
+    while stack and stack[-1][0] >= indent:
+        stack.pop()
+    current_path = ".".join([item[1] for item in stack] + [key])
+    if value:
+        values[current_path] = value.strip("'\"")
+    else:
+        stack.append((indent, key))
+
+print(values.get(wanted, ""))
+PY
+}
+
+hermes_config_get() {
+    local key="$1"
+    local value
+    value=$(hermes config get "$key" 2>/dev/null || true)
+    if is_configured_value "$value"; then
+        printf "%s\n" "$value"
+        return 0
+    fi
+    read_config_value_from_file "$key"
+}
+
+is_enabled_value() {
+    local value
+    value=$(printf "%s" "${1:-}" | tr '[:upper:]' '[:lower:]')
+    case "$value" in
+        true|yes|1|on)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
     esac
 }
 
@@ -139,10 +238,10 @@ configure_model() {
 
     # Detect current model
     local current_model current_provider
-    current_model=$(hermes config get model.default 2>/dev/null || echo "")
-    current_provider=$(hermes config get model.provider 2>/dev/null || echo "")
+    current_model=$(hermes_config_get model.default)
+    current_provider=$(hermes_config_get model.provider)
 
-    if [ -n "$current_model" ]; then
+    if is_configured_value "$current_model"; then
         log_success "Current default model: ${BOLD}${current_model}${NC}"
         echo "  Rigor will use this model for all expert roles."
         echo ""
@@ -155,28 +254,36 @@ configure_model() {
     fi
 
     echo ""
-    echo "  ${BOLD}Choose a model for the Rigor team:${NC}"
+    printf "  %bChoose a model for the Rigor team:%b\n" "$BOLD" "$NC"
     echo ""
     echo "  1) Claude Sonnet 4  (Recommended for coding)"
     echo "  2) GPT-4o           (Great all-rounder)"
     echo "  3) DeepSeek Chat    (Cost-effective)"
     echo "  4) Qwen 3.6 Plus    (Strong Chinese support)"
     echo ""
-    echo -ne "  ${BOLD}Enter choice [1-4]:${NC} "
-    read -r choice
+    echo -ne "  ${BOLD}Enter choice [1-4, default 1]:${NC} "
+    read -r choice || choice=""
+    choice="${choice:-1}"
 
-    local preset="${MODEL_PRESETS[$choice]}"
+    local preset
+    preset=$(model_preset_for_choice "$choice" || true)
     if [ -z "$preset" ]; then
-        log_error "Invalid choice. Using default (Claude Sonnet 4)."
+        log_warn "Invalid choice '$choice'. Using default (Claude Sonnet 4)."
         choice=1
-        preset="${MODEL_PRESETS[$choice]}"
+        preset=$(model_preset_for_choice "$choice")
     fi
 
     IFS='|' read -r model_id provider env_var provider_name <<< "$preset"
 
     echo ""
-    echo -ne "  ${BOLD}Enter your ${provider_name} API Key:${NC} "
-    read -r api_key
+    local api_key existing_api_key
+    existing_api_key=$(get_existing_api_key "$env_var")
+    if [ -n "$existing_api_key" ] && prompt_yes_no "Reuse existing ${env_var} from environment or ~/.hermes/.env?" "Y"; then
+        api_key="$existing_api_key"
+    else
+        echo -ne "  ${BOLD}Enter your ${provider_name} API Key:${NC} "
+        read -r api_key || api_key=""
+    fi
     
     if [ -z "$api_key" ]; then
         log_error "API Key cannot be empty."
@@ -191,6 +298,8 @@ configure_model() {
     
     # Store API key in .env
     local env_file="$HERMES_HOME/.env"
+    mkdir -p "$HERMES_HOME"
+    touch "$env_file"
     if ! grep -q "^${env_var}=" "$env_file" 2>/dev/null; then
         echo "${env_var}=${api_key}" >> "$env_file"
     else
@@ -218,9 +327,7 @@ deploy_profiles() {
             # Profile exists - update
             if [ -f "$soul_src" ]; then
                 cp "$soul_src" "$profile_dir/SOUL.md"
-                if [ -f "$config_src" ]; then
-                    cp "$config_src" "$profile_dir/config.yaml"
-                fi
+                sync_profile_runtime_config "$profile_dir" "$config_src"
                 log_success "$role: updated (existing profile reused)"
                 updated=$((updated + 1))
             else
@@ -238,15 +345,39 @@ deploy_profiles() {
                 skipped=$((skipped + 1))
                 continue
             fi
-            if [ -f "$config_src" ]; then
-                cp "$config_src" "$profile_dir/config.yaml"
-            fi
+            sync_profile_runtime_config "$profile_dir" "$config_src"
             created=$((created + 1))
         fi
     done
 
     echo ""
     echo "  Summary: ${created} created, ${updated} updated, ${skipped} skipped"
+}
+
+sync_profile_runtime_config() {
+    local profile_dir="$1"
+    local fallback_config="$2"
+
+    mkdir -p "$profile_dir"
+
+    # Profiles have their own HERMES_HOME. Copy the user's working Hermes
+    # runtime config/auth so profiles reuse the already configured provider,
+    # model, login, custom endpoints, and API keys. SOUL.md remains role-specific.
+    if [ -f "$CONFIG_FILE" ]; then
+        cp "$CONFIG_FILE" "$profile_dir/config.yaml"
+    elif [ -f "$fallback_config" ]; then
+        cp "$fallback_config" "$profile_dir/config.yaml"
+    fi
+
+    if [ -f "$HERMES_HOME/.env" ]; then
+        cp "$HERMES_HOME/.env" "$profile_dir/.env"
+        chmod 600 "$profile_dir/.env" 2>/dev/null || true
+    fi
+
+    if [ -f "$HERMES_HOME/auth.json" ]; then
+        cp "$HERMES_HOME/auth.json" "$profile_dir/auth.json"
+        chmod 600 "$profile_dir/auth.json" 2>/dev/null || true
+    fi
 }
 
 # ============================================================
@@ -291,7 +422,9 @@ run_smoke_test() {
     done
 
     # Verify kanban config
-    if grep -q "auto_decompose: true" "$CONFIG_FILE" 2>/dev/null; then
+    local auto_decompose
+    auto_decompose=$(hermes_config_get kanban.auto_decompose)
+    if is_enabled_value "$auto_decompose"; then
         log_success "Kanban: auto_decompose enabled"
     else
         log_warn "Kanban: auto_decompose may not be set correctly"
@@ -299,11 +432,12 @@ run_smoke_test() {
 
     # Quick model verification
     local model
-    model=$(hermes config get model.default 2>/dev/null || echo "Not set")
-    if [ -n "$model" ]; then
+    model=$(hermes_config_get model.default)
+    if is_configured_value "$model"; then
         log_success "Model: $model"
     else
         log_warn "Model: not configured"
+        errors=$((errors + 1))
     fi
 
     return $errors
@@ -396,8 +530,12 @@ do_status() {
 
     # Model
     local model
-    model=$(hermes config get model.default 2>/dev/null || echo "Not set")
-    echo "  Model: $model"
+    model=$(hermes_config_get model.default)
+    if is_configured_value "$model"; then
+        log_success "Model: $model"
+    else
+        log_warn "Model: not configured"
+    fi
 
     # Profiles
     local installed=0 missing=0

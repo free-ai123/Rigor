@@ -187,6 +187,49 @@ get_budget() {
     fi
 }
 
+get_config_value() {
+    local key="$1"
+    local value
+    value=$(hermes config get "$key" 2>/dev/null || true)
+    if [ -n "$value" ] && [ "$value" != "Not set" ]; then
+        echo "$value"
+        return
+    fi
+
+    local config_file="$HERMES_HOME/config.yaml"
+    if [ ! -f "$config_file" ]; then
+        return
+    fi
+
+    python3 - "$config_file" "$key" <<'PY' 2>/dev/null || true
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+wanted = sys.argv[2]
+values = {}
+stack = []
+for raw_line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+    if not raw_line.strip() or raw_line.lstrip().startswith("#") or raw_line.lstrip().startswith("- "):
+        continue
+    indent = len(raw_line) - len(raw_line.lstrip(" "))
+    stripped = raw_line.strip()
+    if ":" not in stripped:
+        continue
+    key, value = stripped.split(":", 1)
+    key = key.strip()
+    value = value.strip()
+    while stack and stack[-1][0] >= indent:
+        stack.pop()
+    current_path = ".".join([item[1] for item in stack] + [key])
+    if value:
+        values[current_path] = value.strip("'\"")
+    else:
+        stack.append((indent, key))
+print(values.get(wanted, ""))
+PY
+}
+
 set_budget() {
     local amount="$1"
     echo "$amount" > "$BUDGET_FILE"
@@ -403,7 +446,8 @@ run_status() {
 
     # Model
     local model
-    model=$(hermes config get model.default 2>/dev/null || echo "Not set")
+    model=$(get_config_value model.default)
+    model="${model:-Not set}"
     echo -e "  Model:  ${WHITE}${model}${NC}"
 
     # Profiles

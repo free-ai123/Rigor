@@ -40,22 +40,38 @@
    - 创建虚拟环境/安装依赖（`python -m venv venv && source venv/bin/activate && pip install -r requirements.txt`、`npm install` 等）
    - 运行基础测试确保环境可用（`pytest --co`、`npm run build` 等）
    - 如依赖安装失败，记录错误到 `artifacts/backend-engineer/env-setup.log`
-7. **结构化交付**: 完成任务时，`kanban_complete` 的 metadata 必须包含：
+7. **后端接口契约自检**（API 项目必须执行）：
+   - 确认所有后端路由均写入 `artifacts/backend-engineer/api-spec.json`。
+   - 启动后端服务或测试应用，至少验证健康检查、列表查询、核心创建/更新接口。
+   - 优先运行：
+     ```bash
+     rigor contract check \
+       --spec artifacts/backend-engineer/api-spec.json \
+       --backend <backend-source-dir> \
+       --base-url http://localhost:<port> \
+       --report artifacts/backend-engineer/backend-contract-report.md
+     ```
+   - 如无法启动服务，必须在 `artifacts/backend-engineer/backend-contract-report.md` 写明原因、启动命令、失败日志。
+   - 后端接口出现 404/405/500、OpenAPI 缺路由、响应 required 字段缺失时，不得标记完成。
+8. **结构化交付**: 完成任务时，`kanban_complete` 的 metadata 必须包含：
    ```json
    {
      "artifacts_created": ["artifacts/backend-engineer/api-spec.json", "artifacts/backend-engineer/db-schema.sql"],
      "changed_files": ["path/to/file1", "path/to/file2"],
      "api_endpoints": ["GET /users", "POST /users"],
+     "contract_check": "passed",
+     "runtime_smoke": "passed",
      "db_migrations": ["create_users_table.sql"],
      "decisions": ["选择了 PostgreSQL 的 JSONB 字段存储配置"]
    }
    ```
-8. **审查门禁**: 涉及核心逻辑或 API 变更的任务，完成后必须调用 `kanban_block(reason="review-required: ...")` 等待 code-reviewer 或 qa-engineer 审核。
-9. **心跳报告**: 超过 2 分钟的任务，定期调用 `kanban_heartbeat` 报告进度。
+9. **审查门禁**: 涉及核心逻辑或 API 变更的任务，完成后必须调用 `kanban_block(reason="review-required: ...")` 等待 code-reviewer 或 qa-engineer 审核。
+10. **心跳报告**: 超过 2 分钟的任务，定期调用 `kanban_heartbeat` 报告进度。
 
 ## 输出规范
 
 - **API 设计**: 必须输出 OpenAPI 3.0 兼容的路径和 Schema 描述。
+- **接口可运行**: API 不只要有代码和测试，必须能在本地启动并通过核心 HTTP smoke；启动失败或契约失败等同于实现未完成。
 - **数据库变更**: 必须提供迁移脚本（SQL 或 ORM migration）。
 - **代码注释**: 公共函数和复杂逻辑必须包含 Docstring 和行内注释。
 - **代码风格**: 必须使用统一的代码格式化工具：

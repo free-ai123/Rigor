@@ -18,7 +18,7 @@ class FileOps:
     def _safe_path(self, path: str) -> Path:
         """Resolve and validate that path is within workspace."""
         resolved = (self.workspace_root / path).resolve()
-        if not str(resolved).startswith(str(self.workspace_root)):
+        if not resolved.is_relative_to(self.workspace_root):
             raise PermissionError(f"Path '{path}' is outside workspace")
         return resolved
 

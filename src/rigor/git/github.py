@@ -1,7 +1,7 @@
 """GitHub 平台实现 — 使用 REST API（无需额外依赖）"""
 
 import os
-from typing import Any, Optional
+from typing import Any
 
 import requests
 
@@ -12,6 +12,7 @@ class GitHub(GitPlatform):
     """GitHub API 实现，支持 Token 认证"""
 
     API_BASE = "https://api.github.com"
+    DEFAULT_TIMEOUT = 15
 
     def __init__(self, token: str = None):
         self._token = token or os.getenv("GITHUB_TOKEN", "")
@@ -36,6 +37,7 @@ class GitHub(GitPlatform):
         resp = requests.post(
             url,
             headers=self._headers,
+            timeout=self.DEFAULT_TIMEOUT,
             json={
                 "title": title,
                 "body": body,
@@ -48,13 +50,15 @@ class GitHub(GitPlatform):
 
     def get_pr(self, repo: str, pr_number: int) -> dict[str, Any]:
         url = f"{self.API_BASE}/repos/{repo}/pulls/{pr_number}"
-        resp = requests.get(url, headers=self._headers)
+        resp = requests.get(url, headers=self._headers, timeout=self.DEFAULT_TIMEOUT)
         resp.raise_for_status()
         return resp.json()
 
     def list_prs(self, repo: str, state: str = "open") -> list[dict[str, Any]]:
         url = f"{self.API_BASE}/repos/{repo}/pulls"
-        resp = requests.get(url, headers=self._headers, params={"state": state})
+        resp = requests.get(
+            url, headers=self._headers, params={"state": state, "per_page": 100}, timeout=self.DEFAULT_TIMEOUT
+        )
         resp.raise_for_status()
         return resp.json()
 
@@ -63,6 +67,7 @@ class GitHub(GitPlatform):
         resp = requests.post(
             url,
             headers=self._headers,
+            timeout=self.DEFAULT_TIMEOUT,
             json={
                 "body": body,
                 "event": event,  # APPROVE, REQUEST_CHANGES, COMMENT
@@ -73,21 +78,21 @@ class GitHub(GitPlatform):
 
     def get_repo(self, repo: str) -> dict[str, Any]:
         url = f"{self.API_BASE}/repos/{repo}"
-        resp = requests.get(url, headers=self._headers)
+        resp = requests.get(url, headers=self._headers, timeout=self.DEFAULT_TIMEOUT)
         resp.raise_for_status()
         return resp.json()
 
     def get_files_in_pr(self, repo: str, pr_number: int) -> list[dict[str, Any]]:
         url = f"{self.API_BASE}/repos/{repo}/pulls/{pr_number}/files"
-        resp = requests.get(url, headers=self._headers)
+        resp = requests.get(url, headers=self._headers, params={"per_page": 100}, timeout=self.DEFAULT_TIMEOUT)
         resp.raise_for_status()
         return resp.json()
 
-    def create_issue(self, repo: str, title: str, body: str, labels: Optional[list[str]] = None) -> dict[str, Any]:
+    def create_issue(self, repo: str, title: str, body: str, labels: list[str] | None = None) -> dict[str, Any]:
         url = f"{self.API_BASE}/repos/{repo}/issues"
         data: dict[str, Any] = {"title": title, "body": body}
         if labels:
             data["labels"] = labels
-        resp = requests.post(url, headers=self._headers, json=data)
+        resp = requests.post(url, headers=self._headers, json=data, timeout=self.DEFAULT_TIMEOUT)
         resp.raise_for_status()
         return resp.json()

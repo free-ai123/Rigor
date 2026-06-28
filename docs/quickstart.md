@@ -2,8 +2,8 @@
 
 ## Prerequisites
 
-1. **Hermes Agent** installed: `curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash`
-2. **API Key** configured in `~/.hermes/.env`
+1. **Python 3.10+**
+2. **API Key** for the model provider you plan to use
 3. **RAM**: 2GB minimum (5 roles), 4GB recommended (all 12 roles)
 
 ## 5 Minutes to Your First Project
@@ -11,28 +11,71 @@
 ### Step 1: Install Rigor
 
 ```bash
-git clone https://github.com/rigor-dev/rigor.git
-cd rigor
-bash scripts/setup-expert-team.sh
+git clone https://github.com/free-ai123/Rigor.git
+cd Rigor
+bash scripts/bootstrap.sh
 ```
 
 The script will:
+- Create `.venv`
+- Install Rigor runtime dependencies and security scanning helpers
 - Install 12 role profiles to `~/.hermes/profiles/`
 - Configure Kanban (auto-decompose, dispatch interval)
 - Start Gateway processes for each role
 - Run verification checks
 
+For CLI-only installation without Hermes profile setup:
+
+```bash
+bash scripts/bootstrap.sh --skip-hermes
+```
+
+For contributor tooling and the deprecated custom TUI dependencies:
+
+```bash
+bash scripts/bootstrap.sh --dev
+```
+
+After bootstrap, either activate the virtualenv:
+
+```bash
+source .venv/bin/activate
+rigor chat
+```
+
+Or run through the repository wrapper without activation:
+
+```bash
+./scripts/rigor.sh chat
+```
+
+`rigor chat` launches the Rigor `orchestrator` Hermes profile and automatically syncs the user's current Hermes login/provider/model into that profile first. The legacy `rigor tui` command is deprecated and forwards to this chat mode. Use `./scripts/rigor.sh chat --no-sync-profile` only when you explicitly want isolated profile-specific config.
+
 ### Step 2: Create Your First Task
+
+For a fresh application scaffold, create it outside the Rigor checkout:
+
+```bash
+rigor init my-new-api
+# Default output: ~/projects/my-new-api
+```
+
+Frame the problem before decomposition:
+
+```bash
+rigor frame "Build a URL shortener with custom codes and click tracking" --dir ~/projects/my-new-api --confirm
+```
 
 ```bash
 hermes kanban create "Build a URL shortener with custom codes and click tracking" --triage
 ```
 
 Wait 60 seconds. The Orchestrator will automatically:
-1. Detect project type (Web Application)
-2. Activate relevant roles (all 12)
-3. Decompose into a DAG of 14+ tasks
-4. Assign tasks to matching roles
+1. Read or create the Problem Frame and wait for user confirmation
+2. Detect project type (Web Application)
+3. Activate relevant roles (all 12)
+4. Decompose into a DAG of 14+ tasks
+5. Assign tasks to matching roles
 
 ### Step 3: Watch It Work
 
@@ -45,6 +88,9 @@ hermes kanban show 1 --tree
 
 # View live project dashboard
 cat ~/.hermes/kanban/workspace/shared/structured/project-dashboard.json | python3 -m json.tool
+
+# View local code structure for agent context selection
+./scripts/rigor.sh code-map --dir .
 ```
 
 ### Step 4: Check Results
@@ -84,7 +130,7 @@ model:
 
 ### New Feature Development
 ```
-User → triage → PRD → Architecture → Backend + Frontend → Review → Test → Security → Deploy → UAT → Docs
+User → triage → PRD → Architecture → Backend + Frontend → Contract Gate → Review → Test/Smoke → Security → Deploy → UAT → Docs
 ```
 
 ### Bug Fix (Fast Track)
@@ -105,9 +151,12 @@ hermes gateway status
 hermes -p <role> gateway run  # Run in foreground to see errors
 ```
 
+### Webhook rejects requests
+If `RIGOR_WEBHOOK_SECRET` is set, GitHub requests must send `X-Hub-Signature-256` and GitLab requests must send `X-Gitlab-Token`.
+
 ### Auto-decompose not triggering
 ```bash
-hermes config get kanban.auto_decompose  # Should be "true"
+hermes config show  # Check kanban.auto_decompose is true
 hermes kanban decompose <task-id>         # Manual trigger
 ```
 

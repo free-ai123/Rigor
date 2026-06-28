@@ -1,7 +1,7 @@
 """GitLab 平台实现 — 使用 GitLab REST API v4"""
 
 import os
-from typing import Any, Optional
+from typing import Any
 
 import requests
 
@@ -10,6 +10,8 @@ from .platform import GitPlatform
 
 class GitLab(GitPlatform):
     """GitLab API v4 实现"""
+
+    DEFAULT_TIMEOUT = 15
 
     def __init__(self, token: str = None, base_url: str = None):
         self._token = token or os.getenv("GITLAB_TOKEN", "")
@@ -38,6 +40,7 @@ class GitLab(GitPlatform):
         resp = requests.post(
             url,
             headers=self._headers,
+            timeout=self.DEFAULT_TIMEOUT,
             json={
                 "title": title,
                 "description": body,
@@ -51,7 +54,7 @@ class GitLab(GitPlatform):
     def get_pr(self, repo: str, pr_number: int) -> dict[str, Any]:
         pid = self._project_id(repo)
         url = f"{self._api_url}/projects/{pid}/merge_requests/{pr_number}"
-        resp = requests.get(url, headers=self._headers)
+        resp = requests.get(url, headers=self._headers, timeout=self.DEFAULT_TIMEOUT)
         resp.raise_for_status()
         return resp.json()
 
@@ -60,7 +63,12 @@ class GitLab(GitPlatform):
         # GitLab uses different state names
         state_map = {"open": "opened", "closed": "closed", "all": "all"}
         url = f"{self._api_url}/projects/{pid}/merge_requests"
-        resp = requests.get(url, headers=self._headers, params={"state": state_map.get(state, state)})
+        resp = requests.get(
+            url,
+            headers=self._headers,
+            params={"state": state_map.get(state, state), "per_page": 100},
+            timeout=self.DEFAULT_TIMEOUT,
+        )
         resp.raise_for_status()
         return resp.json()
 
@@ -68,31 +76,31 @@ class GitLab(GitPlatform):
         """GitLab 使用 MR notes/discussion"""
         pid = self._project_id(repo)
         url = f"{self._api_url}/projects/{pid}/merge_requests/{pr_number}/notes"
-        resp = requests.post(url, headers=self._headers, json={"body": body})
+        resp = requests.post(url, headers=self._headers, json={"body": body}, timeout=self.DEFAULT_TIMEOUT)
         resp.raise_for_status()
         return resp.json()
 
     def get_repo(self, repo: str) -> dict[str, Any]:
         pid = self._project_id(repo)
         url = f"{self._api_url}/projects/{pid}"
-        resp = requests.get(url, headers=self._headers)
+        resp = requests.get(url, headers=self._headers, timeout=self.DEFAULT_TIMEOUT)
         resp.raise_for_status()
         return resp.json()
 
     def get_files_in_pr(self, repo: str, pr_number: int) -> list[dict[str, Any]]:
         pid = self._project_id(repo)
         url = f"{self._api_url}/projects/{pid}/merge_requests/{pr_number}/changes"
-        resp = requests.get(url, headers=self._headers)
+        resp = requests.get(url, headers=self._headers, timeout=self.DEFAULT_TIMEOUT)
         resp.raise_for_status()
         data = resp.json()
         return data.get("changes", [])
 
-    def create_issue(self, repo: str, title: str, body: str, labels: Optional[list[str]] = None) -> dict[str, Any]:
+    def create_issue(self, repo: str, title: str, body: str, labels: list[str] | None = None) -> dict[str, Any]:
         pid = self._project_id(repo)
         url = f"{self._api_url}/projects/{pid}/issues"
         data: dict[str, Any] = {"title": title, "description": body}
         if labels:
             data["labels"] = ",".join(labels)
-        resp = requests.post(url, headers=self._headers, json=data)
+        resp = requests.post(url, headers=self._headers, json=data, timeout=self.DEFAULT_TIMEOUT)
         resp.raise_for_status()
         return resp.json()

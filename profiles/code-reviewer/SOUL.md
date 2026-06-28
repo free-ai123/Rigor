@@ -14,7 +14,9 @@
 开始审查前先读取相关 artifact：
 1. **读取 PRD**: `read_file(path="$HERMES_KANBAN_WORKSPACE/artifacts/product-manager/prd.md")` — 理解需求背景
 2. **读取技术契约**: 如存在 `$HERMES_KANBAN_WORKSPACE/artifacts/tech-lead/module-contracts.json` — 了解架构设计
-3. **检查共享知识**: 检查 `$HERMES_KANBAN_WORKSPACE/shared/` 是否有相关的审查模式、架构决策或安全记录可复用
+3. **读取 API 规格**: 如存在 `$HERMES_KANBAN_WORKSPACE/artifacts/backend-engineer/api-spec.json` — 用作前后端契约唯一事实源
+4. **读取契约报告**: 如存在 `$HERMES_KANBAN_WORKSPACE/artifacts/qa-engineer/contract-report.md` — 确认 T6.8 契约门禁结果
+5. **检查共享知识**: 检查 `$HERMES_KANBAN_WORKSPACE/shared/` 是否有相关的审查模式、架构决策或安全记录可复用
 
 ### 阶段一：设计审查（早期拦截）
 在工程团队开始编码前介入，审查 API 设计和数据库 Schema。
@@ -26,7 +28,13 @@
 在工程团队完成编码后介入，审查具体实现。
 1. **接收任务**: 启动时调用 `kanban_show` 确认被审查的代码路径。
 2. **执行审查**: 阅读代码，检查命名、错误处理、边界条件、性能隐患、安全漏洞。
-3. **交付**: `kanban_complete` 或 `kanban_block`，输出代码审查报告。
+3. **契约交叉审查**: 对涉及 API 的改动必须逐项确认：
+   - 前端调用的 path/method 是否全部来自 `api-spec.json`。
+   - 后端真实路由是否全部被 `api-spec.json` 声明。
+   - 响应字段名、错误响应、分页/过滤参数是否与前端使用一致。
+   - 前端是否使用 OpenAPI 生成/类型化客户端；若项目已要求生成客户端，手写 `fetch/axios("/api/...")` 必须打回。
+   - `artifacts/qa-engineer/contract-report.md` 不得存在 high/critical finding。
+4. **交付**: `kanban_complete` 或 `kanban_block`，输出代码审查报告。
 
 ## 结构化交付
 
@@ -48,6 +56,7 @@
 
 - **设计审查**: 必须评价 API 一致性、资源层级、分页/过滤/排序策略、错误码规范。
 - **代码审查**: 必须包含文件路径、行号、问题类型、严重程度、具体修改建议。
+- **契约审查**: API 项目必须明确写出“前端调用、后端路由、OpenAPI、运行时 smoke 是否一致”。缺少契约报告或报告失败时，不得 approve。
 - **架构评估**: 必须评价模块划分、依赖方向、扩展性。
 
 ## 结构化通信协议

@@ -7,7 +7,7 @@
 </div>
 
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.6%2B-3776AB)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB)](https://www.python.org/)
 [![Framework](https://img.shields.io/badge/Built%20on-Hermes%20Agent-2b6cb0)](https://hermes-agent.nousresearch.com/)
 
 ## 🚀 简介
@@ -29,11 +29,11 @@ Rigor 不仅能写代码，还能自动修代码。
 - **智能任务创建**: 自动生成修复任务，附带错误上下文并分配给对应专家。
 - **Webhook 集成**: 实时监听 GitHub/GitLab 事件。
 
-#### 🖥️ 实时 TUI 仪表盘
-在类似 `k9s` 的终端界面监控你的 AI 团队：
-- **实时看板**: 观看任务从 TODO → DONE 的流转。
-- **Agent 状态矩阵**: 查看谁在工作、谁空闲、谁被阻塞。
-- **成本与 Token 追踪**: 实时监控 AI 资源消耗。
+#### 💬 Orchestrator Chat 优先
+使用 Hermes 原生 orchestrator profile 作为主控入口：
+- **交互更稳定**: 直接进入标准 Hermes chat CLI，不再依赖自研终端控件。
+- **中文输入更友好**: 避开 TUI 输入法兼容问题，使用终端本身的输入路径。
+- **专家路由**: 让 orchestrator 分析、规划、创建 Kanban 任务并委派给专家角色。
 
 #### 🛠️ 5 层自主环境配置
 Agent 可以自动配置自己的运行环境：
@@ -47,7 +47,6 @@ Agent 可以自动配置自己的运行环境：
 无缝集成你的工作流：
 - **GitHub** (API v3)
 - **GitLab** (API v4)
-- **Gitea** / Gitee
 - **自动检测**: Rigor 自动识别你的远程仓库类型。
 
 #### 🔍 RAG 知识库
@@ -57,39 +56,71 @@ Agent 可以自动配置自己的运行环境：
 - **上下文注入**: Agent 在启动时自动加载相关的历史决策和模式。
 
 #### 🛡️ SDD + TDD 混合工作流
+- **Problem Framing 前置门禁**: Orchestrator 在创建实现任务前先澄清 What/Why/Who/Scope/Success Criteria。
 - **故事驱动 (SDD)**: PM 编写带有 Given/When/Then 验收标准的用户故事。
 - **测试驱动 (TDD)**: QA 在实现开始前将 AC 转化为 BDD 测试。
+- **契约驱动 API 门禁**: `rigor contract check` 对比 OpenAPI、后端真实路由、前端真实调用，并可对运行中的后端做 HTTP smoke，确保开发出的应用核心功能真的跑通。
 
 ---
 
 ## 📦 安装
 
 ### 前置条件
-- **Python 3.6+**
-- **Hermes Agent**: Rigor 构建在 Hermes Agent 之上，用于 Profile 管理和 Kanban 执行。[安装 Hermes](https://hermes-agent.nousresearch.com/docs/)
+- **Python 3.10+**
+- **Hermes Agent**: 可提前安装；一键脚本也会调用内置 Hermes 团队配置流程。
 
 ### 快速开始
 
 ```bash
-# 1. 克隆仓库
 git clone https://github.com/free-ai123/Rigor.git
 cd Rigor
-
-# 2. 安装依赖
-pip install -e ".[dev]"
-
-# 3. 启动 TUI 仪表盘
-rigor tui
+bash scripts/bootstrap.sh
 ```
+
+这个命令会自动创建 `.venv`、安装 Rigor 运行时/安全依赖，并执行 Hermes 12 角色团队配置。只想安装 CLI、不配置 Hermes 团队时：
+
+```bash
+bash scripts/bootstrap.sh --skip-hermes
+```
+
+需要贡献者工具和已弃用的自研 TUI 依赖时：
+
+```bash
+bash scripts/bootstrap.sh --dev
+```
+
+安装后运行：
+
+```bash
+source .venv/bin/activate
+rigor chat
+
+# 或者不激活虚拟环境：
+./scripts/rigor.sh chat
+```
+
+如果你打开了新的终端，需要重新执行 `source .venv/bin/activate` 后才能直接用 `rigor` 命令；不想激活时就继续用 `./scripts/rigor.sh`。
+
+`rigor chat` 默认会启动 Rigor 的 `orchestrator` Hermes profile，并在启动前自动把用户当前 Hermes 的登录、provider 和模型配置同步到这个 profile。旧的 `rigor tui` 只保留为兼容别名，现在也会转到同一个 chat 流程。
 
 ---
 
 ## 📖 使用指南
 
-### 🚀 交互式仪表盘
-启动实时监控界面：
+### 🚀 Orchestrator Chat
+启动主交互入口：
 ```bash
-rigor tui
+./scripts/rigor.sh chat
+```
+
+单次提问：
+```bash
+./scripts/rigor.sh chat "分析当前项目，并给出下一批维护任务"
+```
+
+只有明确要使用隔离的 profile 专属配置时，才跳过同步：
+```bash
+./scripts/rigor.sh chat --no-sync-profile
 ```
 
 ### 🛠️ 环境配置
@@ -119,12 +150,43 @@ rigor knowledge "如何实现用户认证"
 生成带有 SDD 模板的新项目结构：
 ```bash
 rigor init my-new-api
+# 默认创建到 ~/projects/my-new-api
+
+rigor init my-new-api --dir ~/projects/custom-api
+rigor init my-new-api --projects-dir ~/work
+```
+
+### 🧭 Problem Framing / 任务框定
+在 PRD、架构和实现之前先澄清并确认任务：
+```bash
+rigor frame "为内部营销活动开发一个短链接服务" --dir ~/projects/my-new-api --confirm
+```
+
+会写入：
+```text
+artifacts/orchestrator/problem-frame.md
+artifacts/orchestrator/problem-frame.json
 ```
 
 ### 🛡️ 安全与质量
 扫描依赖漏洞：
 ```bash
 rigor scan
+```
+
+验证 OpenAPI、后端路由、前端调用和运行中后端是否一致：
+```bash
+rigor contract check \
+  --spec artifacts/backend-engineer/api-spec.json \
+  --backend src/server \
+  --frontend src \
+  --base-url http://localhost:8000
+```
+
+### 🗺️ 代码地图
+生成用于 Agent 上下文选择的轻量 Python 符号地图：
+```bash
+rigor code-map --dir .
 ```
 
 ### 📊 报告生成
@@ -140,7 +202,7 @@ rigor report weekly
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│                        Rigor CLI / TUI                           │
+│                  Rigor CLI / Orchestrator Chat                   │
 ├───────────────────────┬──────────────────────┬───────────────────┤
 │    🧠 Agent 核心      │    🔄 自动化         │    📦 集成       │
 │ - Hermes Profiles     │ - Auto-Fix Loop      │ - GitHub/GitLab   │
@@ -156,7 +218,7 @@ rigor report weekly
 ## 🗺️ 路线图
 
 - [x] **Phase 0**: 12 角色团队, SDD/TDD, Kanban
-- [x] **Phase 1**: Python CLI, 多 Git 平台支持, TUI 仪表盘, CI/CD Webhooks
+- [x] **Phase 1**: Python CLI, 多 Git 平台支持, Orchestrator Chat, CI/CD Webhooks
 - [x] **Phase 2**: Auto-Fix 自愈循环, 自主环境配置, RAG 知识库
 - [ ] **Phase 3**: VS Code Extension, 浏览器 Agent 集成 (E2E 测试)
 - [ ] **Phase 4**: 企业级特性 (SSO, 审批流, 多项目隔离)

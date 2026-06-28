@@ -1,0 +1,26 @@
+# ruff 配置文件
+target-version = "py312"
+line-length = 120
+src = ["serverguard", "tests"]
+
+[lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "W",   # pycodestyle warnings
+    "I",   # isort
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "B008",  # do not perform function calls in argument defaults
+]
+
+[lint.isort]
+known-first-party = ["serverguard"]
+
+[format]
+quote-style = "double"
+indent-style = "space"

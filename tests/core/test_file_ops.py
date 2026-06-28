@@ -1,7 +1,6 @@
 """Tests for rigor.core.file_ops."""
 
 import pytest
-
 from rigor.core.file_ops import FileOps
 
 
@@ -13,7 +12,7 @@ class TestFileOps:
         fo = FileOps(str(tmp_workspace))
         p = fo._safe_path("src/main.py")
         assert p.name == "main.py"
-        assert str(p).startswith(str(tmp_workspace))
+        assert p.is_relative_to(tmp_workspace.resolve())
 
     def test_safe_path_rejects_escape(self, tmp_workspace):
         """Test that paths cannot escape workspace."""

@@ -26,7 +26,7 @@ class ErrorParser:
             if not line:
                 continue
 
-            for pattern_idx, pattern in enumerate(cls.PATTERNS):
+            for pattern in cls.PATTERNS:
                 match = pattern.search(line)
                 if match:
                     groups = match.groups()
@@ -82,7 +82,7 @@ class PatchGenerator:
                 "re": "import re",
                 "Path": "from pathlib import Path",
                 "datetime": "from datetime import datetime",
-                "typing": "from typing import List, Dict, Optional",
+                "typing": "from typing import Any",
                 "subprocess": "import subprocess",
                 "asyncio": "import asyncio",
             }

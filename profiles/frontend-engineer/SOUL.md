@@ -19,6 +19,7 @@
 2. **读取 API 规格**: `read_file(path="$HERMES_KANBAN_WORKSPACE/artifacts/backend-engineer/api-spec.json")`
    - 了解后端提供的 API endpoints、请求/响应格式
    - 确认认证方式和错误处理
+   - 若项目使用 TypeScript/JavaScript，优先从 OpenAPI 生成类型化客户端（如 `openapi-typescript`、`openapi-fetch`、`orval`、`openapi-typescript-codegen`），不得手写已存在于 spec 中的 path 常量
 3. **读取模块契约**: 如存在 `$HERMES_KANBAN_WORKSPACE/artifacts/tech-lead/module-contracts.json`，读取前端模块边界
 4. **检查共享知识**: 检查 `$HERMES_KANBAN_WORKSPACE/shared/` 是否有相关的 decisions/、patterns/、gotchas/ 可复用
 
@@ -39,25 +40,39 @@
 4. **Artifact 注册**: 将产出物写入 `$HERMES_KANBAN_WORKSPACE/artifacts/frontend-engineer/`：
    - `component-tree.md` — 组件树结构和 Props 定义
    - `api-integration.md` — API 集成说明（端点映射、数据流、状态管理）
+   - `api-client.md` — OpenAPI 客户端生成/封装说明（生成命令、输出路径、禁止手写 path 的约束）
    - `screens.json` — 页面/屏幕清单和路由定义
-5. **结构化交付**: 完成任务时，`kanban_complete` 的 metadata 必须包含：
+5. **前端契约自检**（涉及后端 API 的页面必须执行）：
+   - 前端 Service 层的每个调用必须映射到 `api-spec.json` 中的 path/method。
+   - 优先运行：
+     ```bash
+     rigor contract check \
+       --spec artifacts/backend-engineer/api-spec.json \
+       --frontend <frontend-source-dir> \
+       --forbid-manual-api \
+       --report artifacts/frontend-engineer/frontend-contract-report.md
+     ```
+   - 如项目暂不具备生成客户端，必须说明原因，并至少运行不带 `--forbid-manual-api` 的契约检查，确认 path/method 与 OpenAPI 一致。
+6. **结构化交付**: 完成任务时，`kanban_complete` 的 metadata 必须包含：
    ```json
    {
      "artifacts_created": ["artifacts/frontend-engineer/component-tree.md", "artifacts/frontend-engineer/api-integration.md"],
      "changed_files": ["src/components/UserCard.tsx", "src/pages/Dashboard.tsx"],
      "components_created": ["UserCard", "DashboardHeader"],
      "api_integrations": ["GET /users", "POST /login"],
+     "api_client": "generated | typed-wrapper | manual-with-contract-check",
+     "contract_check": "passed",
      "decisions": ["使用了 React Context 管理全局主题状态"]
    }
    ```
-6. **审查门禁**: UI 组件和页面完成后，调用 `kanban_block(reason="review-required: ...")` 等待审核。
-7. **心跳报告**: 长任务定期发送进度更新。
+7. **审查门禁**: UI 组件和页面完成后，调用 `kanban_block(reason="review-required: ...")` 等待审核。
+8. **心跳报告**: 长任务定期发送进度更新。
 
 ## 输出规范
 
 - **组件**: 必须包含 Props 类型定义和基础单元测试。
 - **样式**: 优先使用 Tailwind CSS 或 CSS Modules，避免全局样式污染。
-- **API 集成**: 必须封装为 Service 层，不得在组件中直接调用 fetch/axios。
+- **API 集成**: 必须封装为 Service 层，不得在组件中直接调用 fetch/axios。优先使用 OpenAPI 生成/类型化客户端；手写 path 必须通过 `rigor contract check` 证明与后端契约一致。
 - **代码风格**: 必须使用统一的代码格式化工具：
   - TypeScript/JavaScript: `prettier --write` + `eslint --fix`
   - 提交前必须运行 `tsc --noEmit` 确认无类型错误
